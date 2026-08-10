@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  /* Pantone Theme Colors */
+  --color-black: #000000;
+  --color-gold: #CC9933;
+  --color-gold-light: #e6b85c;
+  --color-gold-dark: #a67c29;
+  --color-blue: #0055B6;
+  --color-blue-light: #1a75ff;
+  --color-blue-dark: #003a80;
+
+  /* Neutrals */
+  --color-bg: #0f1115;
+  /* Deep dark blue/gray for a premium look */
+  --color-surface: rgba(25, 28, 36, 0.6);
+  /* Glassmorphism base */
+  --color-surface-hover: rgba(35, 39, 50, 0.8);
+  --color-border: rgba(255, 255, 255, 0.1);
+  --color-text-primary: #ffffff;
+  --color-text-secondary: #9ba1a6;
+
+  /* Status Colors */
+  --color-error: #ef4444;
+  --color-success: #10b981;
+}
+
+/* Global Reset & Base Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: var(--color-surface);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  border-radius: 16px;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
