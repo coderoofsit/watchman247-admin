@@ -10,28 +10,27 @@
   --color-blue-light: #1a75ff;
   --color-blue-dark: #003a80;
 
-  /* Neutrals */
-  --color-bg: #0f1115;
-  /* Deep dark blue/gray for a premium look */
-  --color-surface: rgba(25, 28, 36, 0.6);
-  /* Glassmorphism base */
-  --color-surface-hover: rgba(35, 39, 50, 0.8);
-  --color-border: rgba(255, 255, 255, 0.1);
-  --color-text-primary: #ffffff;
-  --color-text-secondary: #9ba1a6;
+  /* Neumorphism Neutrals (Dark Slate) */
+  --color-bg: #1e222a;
+  /* Main Slate Background */
+  --color-surface: #1e222a;
+  /* Surface must match background for Neumorphism */
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+
+  /* Neumorphic Shadows */
+  --shadow-light: #2c313d;
+  /* Highlight */
+  --shadow-dark: #101317;
+  /* Shadow */
 
   /* Status Colors */
   --color-error: #ef4444;
   --color-success: #10b981;
 }
 
-/* Global Reset & Base Styles */
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
+/* Tailwind's preflight provides the global reset. Do not add an unlayered
+   margin/padding reset here: it overrides Tailwind v4 spacing utilities. */
 body {
   background-color: var(--color-bg);
   color: var(--color-text-primary);
@@ -41,14 +40,75 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Glassmorphism Utilities */
-.glass-panel {
+/* Keep native form affordances consistent with the dark onboarding theme. */
+input[type='date'] {
+  color-scheme: dark;
+}
+
+input[type='date']::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(70%) sepia(12%) saturate(520%) hue-rotate(176deg);
+  opacity: 0.8;
+}
+
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* Neumorphism Utilities */
+.neo-flat {
   background: var(--color-surface);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
   border-radius: 16px;
+  box-shadow: 6px 6px 12px var(--shadow-dark),
+    -6px -6px 12px var(--shadow-light);
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.neo-pressed {
+  background: var(--color-surface);
+  border-radius: 16px;
+  box-shadow: inset 6px 6px 12px var(--shadow-dark),
+    inset -6px -6px 12px var(--shadow-light);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.neo-inset {
+  background: var(--color-surface);
+  border-radius: 12px;
+  box-shadow: inset 4px 4px 8px var(--shadow-dark),
+    inset -4px -4px 8px var(--shadow-light);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+}
+
+.neo-button {
+  background: var(--color-surface);
+  border-radius: 12px;
+  box-shadow: 4px 4px 8px var(--shadow-dark),
+    -4px -4px 8px var(--shadow-light);
+  transition: all 0.2s ease-in-out;
+  border: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.neo-button:active {
+  box-shadow: inset 4px 4px 8px var(--shadow-dark),
+    inset -4px -4px 8px var(--shadow-light);
+  transform: scale(0.98);
+}
+
+.glass-panel {
+  /* Retaining just in case, but mapping it to neo-flat for backwards compatibility during migration */
+  background: var(--color-surface);
+  border-radius: 16px;
+  box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light);
+  border: 1px solid rgba(255, 255, 255, 0.02);
 }
 
 /* Custom Scrollbar */
@@ -61,7 +121,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: var(--shadow-light);
   border-radius: 4px;
 }
 
