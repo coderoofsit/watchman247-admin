@@ -33,6 +33,14 @@ function App() {
               </DashboardLayout>
             </PrivateRoute>
           } />
+
+          <Route path="/users/under-training" element={
+            <PrivateRoute>
+              <DashboardLayout>
+                <UserManagement mode="training" />
+              </DashboardLayout>
+            </PrivateRoute>
+          } />
           
           <Route path="/users/clients" element={
             <PrivateRoute>

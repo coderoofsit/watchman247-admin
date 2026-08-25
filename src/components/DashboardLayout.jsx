@@ -11,7 +11,8 @@ import {
   X,
   Lock,
   User as UserIcon,
-  ChevronDown
+  ChevronDown,
+  GraduationCap
 } from 'lucide-react';
 
 export default function DashboardLayout({ children }) {
@@ -40,6 +41,8 @@ export default function DashboardLayout({ children }) {
         return 'Verified Guards';
       case '/users/under-review':
         return 'Applications Under Review';
+      case '/users/under-training':
+        return 'Guards Under Training';
       case '/users/clients':
         return 'Client Accounts Management';
       default:
@@ -57,6 +60,11 @@ export default function DashboardLayout({ children }) {
       to: '/users/under-review',
       label: 'Under Review',
       icon: FileSearch,
+    },
+    {
+      to: '/users/under-training',
+      label: 'Under Training',
+      icon: GraduationCap,
     },
     {
       to: '/users/clients',

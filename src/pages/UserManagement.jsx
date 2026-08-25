@@ -35,10 +35,22 @@ export default function UserManagement({ mode }) {
     guardId: '',
     grade: 'A',
     trainingName: '',
-    trainingStartDate: '2026-08-10',
+    trainingStartDate: '',
     trainingEndDate: '',
     trainingLocation: ''
   });
+
+  const handleCloseVerifyModal = () => {
+    setShowVerifyModal(false);
+    setVerifyForm({
+      guardId: '',
+      grade: 'A',
+      trainingName: '',
+      trainingStartDate: '',
+      trainingEndDate: '',
+      trainingLocation: ''
+    });
+  };
 
   const fetchGuardDetails = async (userId) => {
     setModalLoading(true);
@@ -82,6 +94,7 @@ export default function UserManagement({ mode }) {
     let endpoint = '';
     if (mode === 'verified') endpoint = '/admin/users/guards?type=verified';
     else if (mode === 'review') endpoint = '/admin/users/guards?type=review';
+    else if (mode === 'training') endpoint = '/admin/users/guards?type=training';
     else if (mode === 'clients') endpoint = '/admin/users/clients';
 
     try {
@@ -132,8 +145,8 @@ export default function UserManagement({ mode }) {
         status === 'verified'
           ? 'Guard verified successfully!'
           : status === 'partially_rejected'
-          ? 'Guard application partially rejected.'
-          : 'Guard application rejected.'
+            ? 'Guard application partially rejected.'
+            : 'Guard application rejected.'
       );
     } catch (err) {
       setActionError(err.message || 'Operation failed.');
@@ -185,7 +198,7 @@ export default function UserManagement({ mode }) {
 
   return (
     <div className="space-y-6">
-      
+
       {/* Top action block: Search */}
       <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
         <div className="relative w-full max-w-md">
@@ -198,7 +211,7 @@ export default function UserManagement({ mode }) {
             className="w-full pl-11 pr-4 py-2.5 bg-[#1e222a] border border-white/5 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#CC9933] transition"
           />
         </div>
-        
+
         <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider">
           Total Records: {filteredData.length}
         </div>
@@ -227,6 +240,9 @@ export default function UserManagement({ mode }) {
                   {mode === 'verified' && <th className="p-4 text-xs uppercase tracking-wider">Experience</th>}
                   {mode === 'review' && <th className="p-4 text-xs uppercase tracking-wider">Status</th>}
                   {mode === 'review' && <th className="p-4 text-xs uppercase tracking-wider">Submitted Date</th>}
+                  {mode === 'training' && <th className="p-4 text-xs uppercase tracking-wider">Training Name</th>}
+                  {mode === 'training' && <th className="p-4 text-xs uppercase tracking-wider">Start Date</th>}
+                  {mode === 'training' && <th className="p-4 text-xs uppercase tracking-wider">Certificate Status</th>}
                   <th className="p-4 text-xs uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
@@ -238,7 +254,7 @@ export default function UserManagement({ mode }) {
                       <div className="text-xs text-slate-500 mt-0.5">{item.email}</div>
                       <div className="text-xs text-slate-500">{item.phone || 'No phone'}</div>
                     </td>
-                    
+
                     {mode !== 'clients' && (
                       <td className="p-4">
                         <span className="text-xs font-mono font-bold text-[#CC9933] uppercase">
@@ -250,11 +266,10 @@ export default function UserManagement({ mode }) {
                     {mode === 'clients' && (
                       <td className="p-4">
                         <span
-                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
-                            item.status === 'active'
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                              : 'bg-red-500/10 text-red-400 border-red-500/20'
-                          }`}
+                          className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${item.status === 'active'
+                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            : 'bg-red-500/10 text-red-400 border-red-500/20'
+                            }`}
                         >
                           {item.status}
                         </span>
@@ -275,11 +290,10 @@ export default function UserManagement({ mode }) {
 
                     {mode === 'review' && (
                       <td className="p-4">
-                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
-                          item.verificationStatus === 'partially_rejected'
-                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                            : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
-                        }`}>
+                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${item.verificationStatus === 'partially_rejected'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                          : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                          }`}>
                           {item.verificationStatus === 'partially_rejected' ? 'partially rejected' : 'completed'}
                         </span>
                       </td>
@@ -290,6 +304,52 @@ export default function UserManagement({ mode }) {
                         {item.verification?.submittedAt
                           ? new Date(item.verification.submittedAt).toLocaleDateString()
                           : 'N/A'}
+                      </td>
+                    )}
+
+                    {mode === 'training' && (
+                      <td className="p-4 text-slate-300 font-medium">
+                        {item.profile?.training?.name || 'N/A'}
+                      </td>
+                    )}
+
+                    {mode === 'training' && (
+                      <td className="p-4 text-slate-300 font-medium">
+                        {item.profile?.training?.startDate
+                          ? new Date(item.profile.training.startDate).toLocaleDateString()
+                          : 'N/A'}
+                      </td>
+                    )}
+
+                    {mode === 'training' && (
+                      <td className="p-4">
+                        {(() => {
+                          const active = item.trainings?.find(t => 
+                            t.status === 'scheduled' || 
+                            t.status === 'in_progress' || 
+                            t.status === 'certificate_submitted' || 
+                            t.status === 'failed' || 
+                            t.status === 'completed'
+                          ) || item.trainings?.[0];
+
+                          if (!active?.certificateUrl) {
+                            return <span className="text-xs text-slate-500 italic">Not Uploaded</span>;
+                          }
+
+                          const certStatus = active.certificateStatus || 'pending';
+
+                          return (
+                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border uppercase tracking-wider ${
+                              certStatus === 'approved'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : certStatus === 'rejected'
+                                ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            }`}>
+                              {certStatus}
+                            </span>
+                          );
+                        })()}
                       </td>
                     )}
 
@@ -309,11 +369,10 @@ export default function UserManagement({ mode }) {
                       {mode === 'clients' && (
                         <button
                           onClick={() => handleToggleClientStatus(item._id)}
-                          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ml-auto ${
-                            item.status === 'active'
-                              ? 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white'
-                              : 'bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white'
-                          }`}
+                          className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ml-auto ${item.status === 'active'
+                            ? 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white'
+                            : 'bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white'
+                            }`}
                         >
                           {item.status === 'active' ? (
                             <>
@@ -346,6 +405,21 @@ export default function UserManagement({ mode }) {
                           </button>
                         </div>
                       )}
+
+                      {mode === 'training' && (
+                        <div className="flex items-center gap-3.5 justify-end">
+
+                          <button
+                            onClick={() => {
+                              setSelectedGuard(item);
+                              fetchGuardDetails(item._id);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-[#CC9933]/20 text-slate-300 hover:text-[#CC9933] text-xs font-bold transition cursor-pointer"
+                          >
+                            View
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -359,12 +433,12 @@ export default function UserManagement({ mode }) {
       {selectedGuard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
           <div className="w-full max-w-4xl bg-[#1e222a] border border-white/5 rounded-2xl p-6 md:p-8 shadow-2xl space-y-6 my-8 max-h-[90vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
-            
+
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-white/5 pb-3">
               <div>
                 <h3 className="text-xl font-bold text-white">
-                  {mode === 'verified' ? 'Guard Profile Details' : 'Verify Guard Application'}
+                  {mode === 'verified' ? 'Guard Profile Details' : mode === 'training' ? 'Guard Training Details' : 'Verify Guard Application'}
                 </h3>
                 <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold text-[#CC9933]">
                   Candidate ID: {selectedGuard.profile?.guardId || 'Pending Assignment'}
@@ -402,25 +476,146 @@ export default function UserManagement({ mode }) {
               </div>
             ) : (
               <>
-                {/* Modal Tabs Selector */}
-                <div className="flex border-b border-white/5 pb-0.5 gap-2">
+                {mode === 'training' ? (
+                  /* Training Guard Details - Show ONLY the training details! */
+                  <div className="space-y-4">
+                    {guardDetails.trainings && guardDetails.trainings.length > 0 ? (
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-bold text-[#CC9933] uppercase tracking-wider">Training History ({guardDetails.trainings.length})</h4>
+                        
+                        {guardDetails.trainings.map((t) => (
+                          <div key={t._id} className="bg-[#131720] rounded-xl p-5 border border-white/5 space-y-4">
+                            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                              <span className="font-bold text-white text-base">{t.trainingName}</span>
+                              <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${
+                                t.status === 'completed'
+                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                  : t.status === 'failed' || t.status === 'cancelled'
+                                  ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                              }`}>
+                                {t.status?.replace('_', ' ')}
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 text-xs">
+                              <div>
+                                <span className="text-slate-500 block">Location</span>
+                                <span className="text-white font-medium">{t.location || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">Start Date</span>
+                                <span className="text-white font-medium">
+                                  {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">End Date</span>
+                                <span className="text-white font-medium">
+                                  {t.endDate ? new Date(t.endDate).toLocaleDateString() : 'N/A'}
+                                </span>
+                              </div>
+                              {t.score !== null && (
+                                <div>
+                                  <span className="text-slate-500 block">Score</span>
+                                  <span className="text-white font-medium">{t.score}</span>
+                                </div>
+                              )}
+                              {t.completedAt && (
+                                <div>
+                                  <span className="text-slate-500 block">Completed At</span>
+                                  <span className="text-white font-medium">
+                                    {new Date(t.completedAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            {t.remarks && (
+                              <div className="border-t border-white/5 pt-2 mt-2">
+                                <span className="text-[10px] text-slate-500 block">Remarks</span>
+                                <span className="text-xs text-slate-300 font-medium">{t.remarks}</span>
+                              </div>
+                            )}
+
+                            {t.certificateUrl && (
+                              <div className="border-t border-white/5 pt-4 mt-2">
+                                <span className="text-[10px] text-slate-500 block mb-1.5">Submitted Training Certificate</span>
+                                <div className="relative group rounded-xl overflow-hidden border border-white/5 max-w-sm">
+                                  <img src={t.certificateUrl} alt="Certificate" className="w-full h-auto object-cover max-h-48" />
+                                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition duration-200">
+                                    <a
+                                      href={t.certificateUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1.5 text-xs text-[#CC9933] hover:underline font-semibold"
+                                    >
+                                      <ExternalLink size={14} />
+                                      <span>View Full Document</span>
+                                    </a>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      guardDetails.profile?.training?.name ? (
+                        <div className="bg-[#131720] rounded-xl p-5 border border-white/5 space-y-4">
+                          <h4 className="text-sm font-bold text-[#CC9933] uppercase tracking-wider">Training Parameters</h4>
+                          <div className="grid grid-cols-2 gap-4 text-xs">
+                            <div>
+                              <span className="text-slate-500 block">Training Name</span>
+                              <span className="text-white font-medium">{guardDetails.profile.training.name}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Location</span>
+                              <span className="text-white font-medium">{guardDetails.profile.training.location || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Start Date</span>
+                              <span className="text-white font-medium">
+                                {guardDetails.profile.training.startDate 
+                                  ? new Date(guardDetails.profile.training.startDate).toLocaleDateString()
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">End Date</span>
+                              <span className="text-white font-medium">
+                                {guardDetails.profile.training.endDate 
+                                  ? new Date(guardDetails.profile.training.endDate).toLocaleDateString()
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-12 text-center text-sm text-slate-500 italic">
+                          No training parameters or history found for this guard.
+                        </div>
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Modal Tabs Selector */}
+                    <div className="flex border-b border-white/5 pb-0.5 gap-2">
                   <button
                     onClick={() => setActiveModalTab('details')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition cursor-pointer ${
-                      activeModalTab === 'details'
-                        ? 'border-[#CC9933] text-[#CC9933]'
-                        : 'border-transparent text-slate-400 hover:text-slate-200'
-                    }`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition cursor-pointer ${activeModalTab === 'details'
+                      ? 'border-[#CC9933] text-[#CC9933]'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                      }`}
                   >
                     Details
                   </button>
                   <button
                     onClick={() => setActiveModalTab('documents')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition cursor-pointer ${
-                      activeModalTab === 'documents'
-                        ? 'border-[#CC9933] text-[#CC9933]'
-                        : 'border-transparent text-slate-400 hover:text-slate-200'
-                    }`}
+                    className={`px-4 py-2 text-sm font-bold border-b-2 transition cursor-pointer ${activeModalTab === 'documents'
+                      ? 'border-[#CC9933] text-[#CC9933]'
+                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                      }`}
                   >
                     Documents
                   </button>
@@ -436,13 +631,12 @@ export default function UserManagement({ mode }) {
                               <span className="font-bold text-white text-sm">{getDocTypeName(doc.documentType)}</span>
                               {doc.title && <p className="text-[10px] text-slate-500">{doc.title}</p>}
                             </div>
-                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${
-                              doc.verificationStatus === 'verified'
-                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                : doc.verificationStatus === 'rejected'
+                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${doc.verificationStatus === 'verified'
+                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              : doc.verificationStatus === 'rejected'
                                 ? 'bg-red-500/10 text-red-400 border-red-500/20'
                                 : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                            }`}>
+                              }`}>
                               {doc.verificationStatus || 'pending'}
                             </span>
                           </div>
@@ -477,7 +671,7 @@ export default function UserManagement({ mode }) {
                                   e.target.style.display = 'none';
                                 }}
                               />
-                              
+
                               {/* Floating action buttons in top right */}
                               <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
                                 <button
@@ -601,10 +795,10 @@ export default function UserManagement({ mode }) {
                 ) : (
                   /* Details Tab Content (Original Modal Body) */
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-                    
+
                     {/* Left Column: Personal details */}
                     <div className="space-y-6">
-                      
+
                       {/* Personal Details */}
                       <div className="bg-black/10 rounded-xl p-4 border border-white/5 space-y-3">
                         <h4 className="text-xs font-bold text-[#CC9933] uppercase tracking-wider">Personal details</h4>
@@ -698,14 +892,14 @@ export default function UserManagement({ mode }) {
 
                     {/* Right Column: Kin & Guarantor */}
                     <div className="space-y-6">
-                      
+
                       <div className="grid grid-cols-2 gap-4">
                         <div className="bg-black/10 rounded-xl p-4 border border-white/5 space-y-2 text-xs">
                           <h5 className="font-bold text-[#CC9933] uppercase">Next of Kin</h5>
                           <p className="font-semibold text-white truncate">{guardDetails.verification?.nextOfKin?.fullName || 'N/A'}</p>
                           <p className="text-slate-500">{guardDetails.verification?.nextOfKin?.relationship} ({guardDetails.verification?.nextOfKin?.phone})</p>
                         </div>
-                        
+
                         <div className="bg-black/10 rounded-xl p-4 border border-white/5 space-y-2 text-xs">
                           <h5 className="font-bold text-[#CC9933] uppercase">Guarantor</h5>
                           <p className="font-semibold text-white truncate">{guardDetails.verification?.guarantor?.fullName || 'N/A'}</p>
@@ -724,13 +918,109 @@ export default function UserManagement({ mode }) {
                         </div>
                       </div>
 
+                      {guardDetails.trainings && guardDetails.trainings.length > 0 ? (
+                        <div className="space-y-4 mt-4">
+                          <h5 className="font-bold text-[#CC9933] uppercase tracking-wider text-[10px]">Training History ({guardDetails.trainings.length})</h5>
+                          
+                          {guardDetails.trainings.map((t) => (
+                            <div key={t._id} className="bg-[#131720] rounded-xl p-4 border border-white/5 space-y-3">
+                              <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                                <span className="font-bold text-white text-sm">{t.trainingName}</span>
+                                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${
+                                  t.status === 'completed'
+                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                    : t.status === 'failed' || t.status === 'cancelled'
+                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                }`}>
+                                  {t.status?.replace('_', ' ')}
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-3.5 text-xs">
+                                <div>
+                                  <span className="text-slate-500 block">Location</span>
+                                  <span className="text-white font-medium">{t.location || 'N/A'}</span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">Start Date</span>
+                                  <span className="text-white font-medium">
+                                    {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-slate-500 block">End Date</span>
+                                  <span className="text-white font-medium">
+                                    {t.endDate ? new Date(t.endDate).toLocaleDateString() : 'N/A'}
+                                  </span>
+                                </div>
+                                {t.score !== null && (
+                                  <div>
+                                    <span className="text-slate-500 block">Score</span>
+                                    <span className="text-white font-medium">{t.score}</span>
+                                  </div>
+                                )}
+                                {t.completedAt && (
+                                  <div>
+                                    <span className="text-slate-500 block">Completed At</span>
+                                    <span className="text-white font-medium">
+                                      {new Date(t.completedAt).toLocaleDateString()}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              {t.remarks && (
+                                <div className="border-t border-white/5 pt-2 mt-2">
+                                  <span className="text-[10px] text-slate-500 block">Remarks</span>
+                                  <span className="text-xs text-slate-300 font-medium">{t.remarks}</span>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        guardDetails.profile?.training?.name && (
+                          <div className="bg-[#131720] rounded-xl p-4 border border-white/5 space-y-3 mt-4">
+                            <h5 className="font-bold text-[#CC9933] uppercase tracking-wider text-[10px]">Training Parameters</h5>
+                            <div className="grid grid-cols-2 gap-3.5 text-xs">
+                              <div>
+                                <span className="text-slate-500 block">Training Name</span>
+                                <span className="text-white font-medium">{guardDetails.profile.training.name}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">Location</span>
+                                <span className="text-white font-medium">{guardDetails.profile.training.location || 'N/A'}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">Start Date</span>
+                                <span className="text-white font-medium">
+                                  {guardDetails.profile.training.startDate 
+                                    ? new Date(guardDetails.profile.training.startDate).toLocaleDateString()
+                                    : 'N/A'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 block">End Date</span>
+                                <span className="text-white font-medium">
+                                  {guardDetails.profile.training.endDate 
+                                    ? new Date(guardDetails.profile.training.endDate).toLocaleDateString()
+                                    : 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      )}
+
                     </div>
 
                   </div>
                 )}
+              </>
+            )}
 
                 {/* Modal Actions */}
-                {mode !== 'verified' && (
+                {mode !== 'verified' && mode !== 'training' && (
                   <div className="border-t border-white/5 pt-4 flex flex-col sm:flex-row gap-3 items-end sm:items-center justify-end">
                     {rejecting ? (
                       <div className="w-full flex flex-col gap-2">
@@ -748,7 +1038,7 @@ export default function UserManagement({ mode }) {
                             onClick={() => {
                               if (!rejectionReason.trim()) {
                                 toast.error('Please enter a rejection reason.');
-                                return;
+                                    return;
                               }
                               handleVerify(guardDetails._id, 'rejected', rejectionReason);
                             }}
@@ -761,7 +1051,7 @@ export default function UserManagement({ mode }) {
                             onClick={() => {
                               if (!rejectionReason.trim()) {
                                 toast.error('Please enter a rejection reason.');
-                                return;
+                                    return;
                               }
                               handleVerify(guardDetails._id, 'partially_rejected', rejectionReason);
                             }}
@@ -804,7 +1094,7 @@ export default function UserManagement({ mode }) {
                                   guardId: '',
                                   grade: 'A',
                                   trainingName: '',
-                                  trainingStartDate: '2026-08-10',
+                                  trainingStartDate: '',
                                   trainingEndDate: '',
                                   trainingLocation: ''
                                 });
@@ -832,6 +1122,119 @@ export default function UserManagement({ mode }) {
                     )}
                   </div>
                 )}
+
+                {/* Modal Actions for Training Certificate */}
+                {mode === 'training' && (
+                  (() => {
+                    const activeT = guardDetails.trainings?.find(t => 
+                      t.status === 'scheduled' || 
+                      t.status === 'in_progress' || 
+                      t.status === 'certificate_submitted' || 
+                      t.status === 'failed' || 
+                      t.status === 'completed'
+                    ) || guardDetails.trainings?.[0];
+
+                    if (!activeT || !activeT.certificateUrl || activeT.certificateStatus === 'approved') {
+                      return null;
+                    }
+
+                    return (
+                      <div className="border-t border-white/5 pt-4">
+                        {rejecting ? (
+                          <div className="w-full flex flex-col gap-2">
+                            <label className="text-xs text-slate-400 font-medium ml-1">Rejection Reason</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                placeholder="Explain why this certificate is rejected..."
+                                value={rejectionReason}
+                                onChange={(e) => setRejectionReason(e.target.value)}
+                                className="flex-1 px-3 py-2 bg-[#131720] border border-white/5 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 transition"
+                                required
+                              />
+                              <button
+                                onClick={async () => {
+                                  if (!rejectionReason.trim()) {
+                                    toast.error('Please enter a rejection reason.');
+                                    return;
+                                  }
+                                  setSubmittingAction(true);
+                                  try {
+                                    await apiRequest(`/admin/users/trainings/${activeT._id}/verify`, {
+                                      method: 'PATCH',
+                                      body: JSON.stringify({ status: 'rejected', rejectionReason })
+                                    });
+                                    toast.success('Certificate rejected successfully.');
+                                    setRejecting(false);
+                                    setRejectionReason('');
+                                    setSelectedGuard(null);
+                                    setGuardDetails(null);
+                                    fetchData();
+                                  } catch (err) {
+                                    toast.error(err.message || 'Operation failed.');
+                                  } finally {
+                                    setSubmittingAction(false);
+                                  }
+                                }}
+                                disabled={submittingAction}
+                                className="px-4 py-2 bg-red-500 text-white font-bold text-xs rounded-xl hover:bg-red-600 transition cursor-pointer whitespace-nowrap"
+                              >
+                                Complete Reject
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRejecting(false);
+                                  setRejectionReason('');
+                                }}
+                                className="px-4 py-2 bg-[#2c313d] text-slate-300 font-bold text-xs rounded-xl hover:bg-[#2c313d]/80 transition cursor-pointer whitespace-nowrap"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex gap-3 justify-end">
+                            <button
+                              onClick={() => setRejecting(true)}
+                              disabled={submittingAction}
+                              className="px-4 py-2.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white border border-red-500/20 font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                            >
+                              <span>Reject Certificate</span>
+                            </button>
+                            <button
+                              onClick={async () => {
+                                setSubmittingAction(true);
+                                try {
+                                  await apiRequest(`/admin/users/trainings/${activeT._id}/verify`, {
+                                    method: 'PATCH',
+                                    body: JSON.stringify({ status: 'approved' })
+                                  });
+                                  toast.success('Certificate approved and guard activated successfully!');
+                                  setSelectedGuard(null);
+                                  setGuardDetails(null);
+                                  fetchData();
+                                } catch (err) {
+                                  toast.error(err.message || 'Operation failed.');
+                                } finally {
+                                  setSubmittingAction(false);
+                                }
+                              }}
+                              disabled={submittingAction}
+                              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                            >
+                              {submittingAction ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <UserCheck size={14} />
+                              )}
+                              <span>Approve & Activate Guard</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()
+                )}
               </>
             )}
 
@@ -841,7 +1244,7 @@ export default function UserManagement({ mode }) {
 
       {/* Zoomed Image Blur Overlay Modal */}
       {zoomedImage && (
-        <div 
+        <div
           onClick={() => setZoomedImage(null)}
           className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 cursor-zoom-out"
         >
@@ -867,7 +1270,7 @@ export default function UserManagement({ mode }) {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
           <div className="w-full max-w-md bg-[#1e222a] border border-white/5 rounded-2xl p-6 shadow-2xl space-y-5 relative animate-in zoom-in-95 duration-200">
             <button
-              onClick={() => setShowVerifyModal(false)}
+              onClick={handleCloseVerifyModal}
               className="absolute right-4 top-4 p-1.5 text-slate-400 hover:text-white rounded-lg bg-white/5 transition cursor-pointer"
             >
               <X size={16} />
@@ -892,7 +1295,7 @@ export default function UserManagement({ mode }) {
                   toast.error('Training name is required');
                   return;
                 }
-                
+
                 const payload = {
                   guardId: verifyForm.guardId,
                   grade: verifyForm.grade,
@@ -905,7 +1308,7 @@ export default function UserManagement({ mode }) {
                 };
 
                 await handleVerify(guardDetails._id, 'verified', payload);
-                setShowVerifyModal(false);
+                handleCloseVerifyModal();
               }}
               className="space-y-4"
             >
@@ -982,7 +1385,7 @@ export default function UserManagement({ mode }) {
               <div className="flex gap-3 pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowVerifyModal(false)}
+                  onClick={handleCloseVerifyModal}
                   className="flex-1 py-2 bg-[#2c313d] hover:bg-[#2c313d]/80 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   Cancel
