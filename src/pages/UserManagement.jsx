@@ -14,8 +14,21 @@ import {
   CheckCircle,
   AlertTriangle,
   UserMinus,
-  UserPlus
+  UserPlus,
+  MapPin,
+  User,
+  FileText,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
+
+const VERIFY_STEPS = [
+  { id: 1, key: 'address', label: 'Address', icon: MapPin },
+  { id: 2, key: 'profile', label: 'Profile', icon: User },
+  { id: 3, key: 'documents', label: 'Documents', icon: FileText },
+  { id: 4, key: 'verification', label: 'Verification', icon: ShieldCheck },
+  { id: 5, key: 'review', label: 'Review', icon: FileCheck },
+];
 
 export default function UserManagement({ mode }) {
   const [data, setData] = useState([]);
@@ -24,7 +37,7 @@ export default function UserManagement({ mode }) {
   const [selectedGuard, setSelectedGuard] = useState(null);
   const [guardDetails, setGuardDetails] = useState(null);
   const [modalLoading, setModalLoading] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState('details');
+  const [activeModalStep, setActiveModalStep] = useState(1);
   const [zoomedImage, setZoomedImage] = useState(null);
   const [rejecting, setRejecting] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -55,6 +68,7 @@ export default function UserManagement({ mode }) {
   const fetchGuardDetails = async (userId) => {
     setModalLoading(true);
     setActionError('');
+    setActiveModalStep(1);
     try {
       const response = await apiRequest(`/admin/users/guards/${userId}`, { method: 'GET' });
       setGuardDetails(response?.data || response);
@@ -111,7 +125,7 @@ export default function UserManagement({ mode }) {
     fetchData();
     setSelectedGuard(null);
     setGuardDetails(null);
-    setActiveModalTab('details');
+    setActiveModalStep(1);
     setZoomedImage(null);
     setRejectingDocId(null);
     setDocRejectReasonInput('');
@@ -134,7 +148,7 @@ export default function UserManagement({ mode }) {
       });
       setSelectedGuard(null);
       setGuardDetails(null);
-      setActiveModalTab('details');
+      setActiveModalStep(1);
       setZoomedImage(null);
       setRejectingDocId(null);
       setDocRejectReasonInput('');
@@ -196,6 +210,276 @@ export default function UserManagement({ mode }) {
     return types[type] || type.replace(/_/g, ' ');
   };
 
+  const formatDate = (value) => (value ? new Date(value).toLocaleDateString() : 'N/A');
+
+  const formatAddress = (addr) => {
+    if (!addr) return 'N/A';
+    const parts = [
+      addr.addressLine1,
+      addr.addressLine2,
+      [addr.city, addr.region].filter(Boolean).join(', '),
+      addr.postalCode,
+      addr.country,
+    ].filter(Boolean);
+    return parts.length ? parts.join(' · ') : 'N/A';
+  };
+
+  const goToModalStep = (step) => {
+    setActiveModalStep(Math.min(Math.max(step, 1), VERIFY_STEPS.length));
+  };
+
+  const getGuarantorIdImages = (guarantor) => {
+    const front =
+      guarantor?.ghanaCard?.fileUrl
+      || guarantor?.ghanaCardFile?.url
+      || null;
+    const back = guarantor?.ghanaCard?.fileUrlBack || null;
+    return { front, back };
+  };
+
+  const getApproveVerifyGate = (details) => {
+    const docs = details?.documents || [];
+    const requiredTypes = [
+      { type: 'ghana_card', label: 'Ghana Card' },
+      { type: 'police_clearance', label: 'Police Clearance' },
+      { type: 'medical_report', label: 'Medical Report' },
+      { type: 'ssnit_card', label: 'SSNIT Card' },
+    ];
+
+    if (!docs.length) {
+      return { canApprove: false, reason: 'No documents uploaded yet.' };
+    }
+
+    for (const req of requiredTypes) {
+      const matches = docs.filter((d) => d.documentType === req.type);
+      if (!matches.length) {
+        return { canApprove: false, reason: `Missing required document: ${req.label}.` };
+      }
+      const unverified = matches.filter((d) => d.verificationStatus !== 'verified');
+      if (unverified.length) {
+        const side = unverified[0].title ? ` (${unverified[0].title})` : '';
+        return {
+          canApprove: false,
+          reason: `Approve all ${req.label} files first${side}.`,
+        };
+      }
+    }
+
+    const otherPending = docs.filter((d) => d.verificationStatus !== 'verified');
+    if (otherPending.length) {
+      return {
+        canApprove: false,
+        reason: `Approve remaining documents first (${otherPending.length} left).`,
+      };
+    }
+
+    return { canApprove: true, reason: null };
+  };
+
+  const approveVerifyGate = getApproveVerifyGate(guardDetails);
+
+  const renderIdImage = (url, label) => (
+    <div key={label} className="space-y-1.5">
+      <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">{label}</span>
+      {url ? (
+        <div className="relative group w-full h-40 bg-white border border-[#e8ecf1] rounded-xl overflow-hidden flex items-center justify-center">
+          <img
+            src={url}
+            alt={label}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.style.display = 'none';
+            }}
+          />
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 z-10">
+            <button
+              type="button"
+              onClick={() => setZoomedImage(url)}
+              className="w-7 h-7 bg-black/65 hover:bg-[#1a56b4] text-white rounded-lg transition flex items-center justify-center cursor-pointer"
+              title={`Zoom ${label}`}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+              </svg>
+            </button>
+            <a
+              href={url}
+              target="_blank"
+              rel="noreferrer"
+              className="w-7 h-7 bg-black/65 hover:bg-[#1a56b4] text-white rounded-lg transition flex items-center justify-center"
+              title={`Open ${label}`}
+            >
+              <ExternalLink size={12} />
+            </a>
+          </div>
+        </div>
+      ) : (
+        <div className="w-full h-40 bg-white border border-dashed border-[#e8ecf1] rounded-xl flex items-center justify-center text-[11px] text-slate-400 italic">
+          No {label.toLowerCase()} uploaded
+        </div>
+      )}
+    </div>
+  );
+
+  const renderDocumentCard = (doc) => (
+    <div key={doc._id || `${doc.documentType}-${doc.title}`} className="neo-flat p-5 border border-[#e8ecf1] flex flex-col justify-between gap-4">
+      <div className="flex items-center justify-between border-b border-[#e8ecf1] pb-2">
+        <div>
+          <span className="font-bold text-slate-800 text-sm">{getDocTypeName(doc.documentType)}</span>
+          {doc.title && <p className="text-[10px] text-slate-500">{doc.title}</p>}
+        </div>
+        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${doc.verificationStatus === 'verified'
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+          : doc.verificationStatus === 'rejected'
+            ? 'bg-red-500/10 text-red-400 border-red-500/20'
+            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+          }`}>
+          {doc.verificationStatus || 'pending'}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-400 border-b border-[#e8ecf1] pb-3">
+        <div>
+          <span className="text-slate-500 block">Doc Number</span>
+          <span className="font-semibold text-slate-800 break-all">{doc.documentNumber || 'N/A'}</span>
+        </div>
+        <div>
+          <span className="text-slate-500 block">Issue Date</span>
+          <span className="font-semibold text-slate-800">{formatDate(doc.issuedAt)}</span>
+        </div>
+        <div>
+          <span className="text-slate-500 block">Expiry Date</span>
+          <span className="font-semibold text-slate-800">{formatDate(doc.expiresAt)}</span>
+        </div>
+      </div>
+
+      {doc.fileUrl ? (
+        <div className="relative group w-full h-48 bg-slate-50 border border-[#e8ecf1] rounded-xl overflow-hidden flex items-center justify-center shadow-inner">
+          <img
+            src={doc.fileUrl}
+            alt={getDocTypeName(doc.documentType)}
+            className="w-full h-full object-cover opacity-80 group-hover:opacity-60 transition duration-200"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.style.display = 'none';
+            }}
+          />
+          <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
+            <button
+              type="button"
+              onClick={() => setZoomedImage(doc.fileUrl)}
+              className="w-8 h-8 bg-black/65 hover:bg-[#1a56b4] text-white hover:text-black rounded-lg transition shadow-lg flex items-center justify-center cursor-pointer border border-[var(--color-border)]"
+              title="Zoom Document"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+              </svg>
+            </button>
+            <a
+              href={doc.fileUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="w-8 h-8 bg-black/65 hover:bg-[#1a56b4] text-white hover:text-black rounded-lg transition shadow-lg flex items-center justify-center border border-[var(--color-border)]"
+              title="Preview in New Tab"
+            >
+              <ExternalLink size={14} />
+            </a>
+          </div>
+        </div>
+      ) : (
+        <div className="w-full h-48 bg-slate-50 border border-dashed border-[#e8ecf1] rounded-xl flex items-center justify-center text-xs text-slate-500 italic">
+          No Document File Uploaded
+        </div>
+      )}
+
+      <div className="border-t border-[#e8ecf1] pt-3 mt-1 flex flex-col gap-2">
+        {rejectingDocId === doc._id ? (
+          <div className="flex flex-col gap-2">
+            <label className="text-[10px] text-slate-400 font-semibold uppercase">Rejection Reason</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="e.g. Blurred photo, expired date..."
+                value={docRejectReasonInput}
+                onChange={(e) => setDocRejectReasonInput(e.target.value)}
+                className="flex-1 px-3 py-1.5 bg-slate-50 border border-[#e8ecf1] rounded-lg text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-red-500 transition"
+                required
+              />
+              <button
+                onClick={() => {
+                  if (!docRejectReasonInput.trim()) {
+                    toast.error('Please enter a rejection reason.');
+                    return;
+                  }
+                  handleVerifyDocument(doc._id, 'rejected', docRejectReasonInput);
+                }}
+                className="px-3 py-1.5 bg-red-500 text-white font-bold text-xs rounded-lg hover:bg-red-600 transition cursor-pointer"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => {
+                  setRejectingDocId(null);
+                  setDocRejectReasonInput('');
+                }}
+                className="px-3 py-1.5 bg-slate-100 text-slate-600 font-bold text-xs rounded-lg hover:bg-slate-100/80 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between text-xs">
+            <div>
+              {doc.verificationStatus === 'verified' ? (
+                <span className="text-emerald-400 font-bold flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Approved
+                </span>
+              ) : doc.verificationStatus === 'rejected' ? (
+                <div className="text-red-400 font-semibold">
+                  <span className="block">Rejected</span>
+                  <span className="text-[10px] text-slate-500 font-normal block max-w-[200px] truncate" title={doc.rejectionReason}>
+                    Reason: {doc.rejectionReason || 'N/A'}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-amber-400 font-bold">Pending Review</span>
+              )}
+            </div>
+
+            {mode !== 'verified' && (
+              <div className="flex gap-2">
+                {doc.verificationStatus !== 'verified' && (
+                  <button
+                    onClick={() => handleVerifyDocument(doc._id, 'verified')}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white font-bold text-xs transition cursor-pointer"
+                  >
+                    Approve
+                  </button>
+                )}
+                {doc.verificationStatus !== 'rejected' && (
+                  <button
+                    onClick={() => {
+                      setRejectingDocId(doc._id);
+                      setDocRejectReasonInput('');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white font-bold text-xs transition cursor-pointer"
+                  >
+                    Reject
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
 
@@ -208,7 +492,7 @@ export default function UserManagement({ mode }) {
             placeholder="Search by name, email, phone or guard ID..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-11 pr-4 py-2.5 bg-[#1e222a] border border-white/5 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#CC9933] transition"
+            className="w-full pl-11 pr-4 py-2.5 bg-white border border-[#e8ecf1] rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#1a56b4] transition"
           />
         </div>
 
@@ -218,10 +502,10 @@ export default function UserManagement({ mode }) {
       </div>
 
       {/* Main Table Card */}
-      <div className="neo-flat overflow-hidden border border-white/5">
+      <div className="neo-flat overflow-hidden border border-[#e8ecf1]">
         {loading ? (
           <div className="p-12 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="h-8 w-8 animate-spin text-[#CC9933]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#1a56b4]" />
             <span className="text-xs text-slate-500">Fetching records...</span>
           </div>
         ) : filteredData.length === 0 ? (
@@ -232,7 +516,7 @@ export default function UserManagement({ mode }) {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-sm">
               <thead>
-                <tr className="border-b border-white/5 bg-black/10 text-slate-400 font-semibold">
+                <tr className="border-b border-[#e8ecf1] bg-slate-50 text-slate-400 font-semibold">
                   <th className="p-4 text-xs uppercase tracking-wider">Name / Contact</th>
                   {mode !== 'clients' && <th className="p-4 text-xs uppercase tracking-wider">Guard ID</th>}
                   {mode === 'clients' && <th className="p-4 text-xs uppercase tracking-wider">Status</th>}
@@ -246,18 +530,18 @@ export default function UserManagement({ mode }) {
                   <th className="p-4 text-xs uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-white/5">
+              <tbody className="divide-y divide-[#e8ecf1]">
                 {filteredData.map((item) => (
-                  <tr key={item._id} className="hover:bg-white/2 transition">
+                  <tr key={item._id} className="hover:bg-slate-50 transition">
                     <td className="p-4">
-                      <div className="font-semibold text-white">{item.fullName}</div>
+                      <div className="font-semibold text-slate-800">{item.fullName}</div>
                       <div className="text-xs text-slate-500 mt-0.5">{item.email}</div>
                       <div className="text-xs text-slate-500">{item.phone || 'No phone'}</div>
                     </td>
 
                     {mode !== 'clients' && (
                       <td className="p-4">
-                        <span className="text-xs font-mono font-bold text-[#CC9933] uppercase">
+                        <span className="text-xs font-mono font-bold text-[#1a56b4] uppercase">
                           {item.profile?.guardId || 'PENDING'}
                         </span>
                       </td>
@@ -277,13 +561,13 @@ export default function UserManagement({ mode }) {
                     )}
 
                     {mode === 'verified' && (
-                      <td className="p-4 text-slate-300 font-medium">
+                      <td className="p-4 text-slate-600 font-medium">
                         {item.profile?.nationality || 'N/A'}
                       </td>
                     )}
 
                     {mode === 'verified' && (
-                      <td className="p-4 text-slate-300 font-medium">
+                      <td className="p-4 text-slate-600 font-medium">
                         {item.profile?.yearsOfExperience ?? 0} Years
                       </td>
                     )}
@@ -300,7 +584,7 @@ export default function UserManagement({ mode }) {
                     )}
 
                     {mode === 'review' && (
-                      <td className="p-4 text-slate-300">
+                      <td className="p-4 text-slate-600">
                         {item.verification?.submittedAt
                           ? new Date(item.verification.submittedAt).toLocaleDateString()
                           : 'N/A'}
@@ -308,13 +592,13 @@ export default function UserManagement({ mode }) {
                     )}
 
                     {mode === 'training' && (
-                      <td className="p-4 text-slate-300 font-medium">
+                      <td className="p-4 text-slate-600 font-medium">
                         {item.profile?.training?.name || 'N/A'}
                       </td>
                     )}
 
                     {mode === 'training' && (
-                      <td className="p-4 text-slate-300 font-medium">
+                      <td className="p-4 text-slate-600 font-medium">
                         {item.profile?.training?.startDate
                           ? new Date(item.profile.training.startDate).toLocaleDateString()
                           : 'N/A'}
@@ -360,7 +644,7 @@ export default function UserManagement({ mode }) {
                             setSelectedGuard(item);
                             fetchGuardDetails(item._id);
                           }}
-                          className="px-3.5 py-1.5 rounded-lg bg-[#CC9933]/10 hover:bg-[#CC9933] text-[#CC9933] hover:text-black text-xs font-bold transition cursor-pointer"
+                          className="px-3.5 py-1.5 rounded-lg bg-blue-50 hover:bg-[#1a56b4] text-[#1a56b4] hover:text-white text-xs font-bold transition cursor-pointer"
                         >
                           Review Application
                         </button>
@@ -371,7 +655,7 @@ export default function UserManagement({ mode }) {
                           onClick={() => handleToggleClientStatus(item._id)}
                           className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ml-auto ${item.status === 'active'
                             ? 'bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white'
-                            : 'bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-white'
+                            : 'bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-[var(--color-text-primary)]'
                             }`}
                         >
                           {item.status === 'active' ? (
@@ -399,7 +683,7 @@ export default function UserManagement({ mode }) {
                               setSelectedGuard(item);
                               fetchGuardDetails(item._id);
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-[#CC9933]/20 text-slate-300 hover:text-[#CC9933] text-xs font-bold transition cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-[#1a56b4] text-xs font-bold transition cursor-pointer"
                           >
                             View Profile
                           </button>
@@ -414,7 +698,7 @@ export default function UserManagement({ mode }) {
                               setSelectedGuard(item);
                               fetchGuardDetails(item._id);
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-[#CC9933]/20 text-slate-300 hover:text-[#CC9933] text-xs font-bold transition cursor-pointer"
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-[#1a56b4] text-xs font-bold transition cursor-pointer"
                           >
                             View
                           </button>
@@ -432,15 +716,15 @@ export default function UserManagement({ mode }) {
       {/* Review Detail Modal */}
       {selectedGuard && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
-          <div className="w-full max-w-4xl bg-[#1e222a] border border-white/5 rounded-2xl p-6 md:p-8 shadow-2xl space-y-6 my-8 max-h-[90vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-4xl bg-white border border-[#e8ecf1] rounded-2xl p-6 md:p-8 shadow-[var(--shadow-card)] space-y-6 my-8 max-h-[90vh] overflow-y-auto relative animate-in zoom-in-95 duration-200">
 
             {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-white/5 pb-3">
+            <div className="flex items-center justify-between border-b border-[#e8ecf1] pb-3">
               <div>
-                <h3 className="text-xl font-bold text-white">
+                <h3 className="text-xl font-bold text-slate-800">
                   {mode === 'verified' ? 'Guard Profile Details' : mode === 'training' ? 'Guard Training Details' : 'Verify Guard Application'}
                 </h3>
-                <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold text-[#CC9933]">
+                <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold text-[#1a56b4]">
                   Candidate ID: {selectedGuard.profile?.guardId || 'Pending Assignment'}
                 </p>
               </div>
@@ -452,7 +736,7 @@ export default function UserManagement({ mode }) {
                   setRejectionReason('');
                   setActionError('');
                 }}
-                className="text-slate-400 hover:text-white p-1.5 hover:bg-white/5 rounded-xl transition cursor-pointer"
+                className="text-slate-400 hover:text-[var(--color-text-primary)] p-1.5 hover:bg-slate-100 rounded-xl transition cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -467,7 +751,7 @@ export default function UserManagement({ mode }) {
 
             {modalLoading ? (
               <div className="py-24 flex flex-col items-center justify-center gap-3">
-                <Loader2 className="h-8 w-8 animate-spin text-[#CC9933]" />
+                <Loader2 className="h-8 w-8 animate-spin text-[#1a56b4]" />
                 <span className="text-xs text-slate-500">Loading complete guard dossier...</span>
               </div>
             ) : !guardDetails ? (
@@ -481,12 +765,12 @@ export default function UserManagement({ mode }) {
                   <div className="space-y-4">
                     {guardDetails.trainings && guardDetails.trainings.length > 0 ? (
                       <div className="space-y-4">
-                        <h4 className="text-sm font-bold text-[#CC9933] uppercase tracking-wider">Training History ({guardDetails.trainings.length})</h4>
+                        <h4 className="text-sm font-bold text-[#1a56b4] uppercase tracking-wider">Training History ({guardDetails.trainings.length})</h4>
                         
                         {guardDetails.trainings.map((t) => (
-                          <div key={t._id} className="bg-[#131720] rounded-xl p-5 border border-white/5 space-y-4">
-                            <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                              <span className="font-bold text-white text-base">{t.trainingName}</span>
+                          <div key={t._id} className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-4">
+                            <div className="flex items-center justify-between border-b border-[#e8ecf1] pb-2">
+                              <span className="font-bold text-slate-800 text-base">{t.trainingName}</span>
                               <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${
                                 t.status === 'completed'
                                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
@@ -501,53 +785,53 @@ export default function UserManagement({ mode }) {
                             <div className="grid grid-cols-2 gap-4 text-xs">
                               <div>
                                 <span className="text-slate-500 block">Location</span>
-                                <span className="text-white font-medium">{t.location || 'N/A'}</span>
+                                <span className="text-[var(--color-text-primary)] font-medium">{t.location || 'N/A'}</span>
                               </div>
                               <div>
                                 <span className="text-slate-500 block">Start Date</span>
-                                <span className="text-white font-medium">
+                                <span className="text-[var(--color-text-primary)] font-medium">
                                   {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'}
                                 </span>
                               </div>
                               <div>
                                 <span className="text-slate-500 block">End Date</span>
-                                <span className="text-white font-medium">
+                                <span className="text-[var(--color-text-primary)] font-medium">
                                   {t.endDate ? new Date(t.endDate).toLocaleDateString() : 'N/A'}
                                 </span>
                               </div>
                               {t.score !== null && (
                                 <div>
                                   <span className="text-slate-500 block">Score</span>
-                                  <span className="text-white font-medium">{t.score}</span>
+                                  <span className="text-[var(--color-text-primary)] font-medium">{t.score}</span>
                                 </div>
                               )}
                               {t.completedAt && (
                                 <div>
                                   <span className="text-slate-500 block">Completed At</span>
-                                  <span className="text-white font-medium">
+                                  <span className="text-[var(--color-text-primary)] font-medium">
                                     {new Date(t.completedAt).toLocaleDateString()}
                                   </span>
                                 </div>
                               )}
                             </div>
                             {t.remarks && (
-                              <div className="border-t border-white/5 pt-2 mt-2">
+                              <div className="border-t border-[#e8ecf1] pt-2 mt-2">
                                 <span className="text-[10px] text-slate-500 block">Remarks</span>
-                                <span className="text-xs text-slate-300 font-medium">{t.remarks}</span>
+                                <span className="text-xs text-slate-600 font-medium">{t.remarks}</span>
                               </div>
                             )}
 
                             {t.certificateUrl && (
-                              <div className="border-t border-white/5 pt-4 mt-2">
+                              <div className="border-t border-[#e8ecf1] pt-4 mt-2">
                                 <span className="text-[10px] text-slate-500 block mb-1.5">Submitted Training Certificate</span>
-                                <div className="relative group rounded-xl overflow-hidden border border-white/5 max-w-sm">
+                                <div className="relative group rounded-xl overflow-hidden border border-[#e8ecf1] max-w-sm">
                                   <img src={t.certificateUrl} alt="Certificate" className="w-full h-auto object-cover max-h-48" />
                                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition duration-200">
                                     <a
                                       href={t.certificateUrl}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="inline-flex items-center gap-1.5 text-xs text-[#CC9933] hover:underline font-semibold"
+                                      className="inline-flex items-center gap-1.5 text-xs text-[#1a56b4] hover:underline font-semibold"
                                     >
                                       <ExternalLink size={14} />
                                       <span>View Full Document</span>
@@ -561,20 +845,20 @@ export default function UserManagement({ mode }) {
                       </div>
                     ) : (
                       guardDetails.profile?.training?.name ? (
-                        <div className="bg-[#131720] rounded-xl p-5 border border-white/5 space-y-4">
-                          <h4 className="text-sm font-bold text-[#CC9933] uppercase tracking-wider">Training Parameters</h4>
+                        <div className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-4">
+                          <h4 className="text-sm font-bold text-[#1a56b4] uppercase tracking-wider">Training Parameters</h4>
                           <div className="grid grid-cols-2 gap-4 text-xs">
                             <div>
                               <span className="text-slate-500 block">Training Name</span>
-                              <span className="text-white font-medium">{guardDetails.profile.training.name}</span>
+                              <span className="text-[var(--color-text-primary)] font-medium">{guardDetails.profile.training.name}</span>
                             </div>
                             <div>
                               <span className="text-slate-500 block">Location</span>
-                              <span className="text-white font-medium">{guardDetails.profile.training.location || 'N/A'}</span>
+                              <span className="text-[var(--color-text-primary)] font-medium">{guardDetails.profile.training.location || 'N/A'}</span>
                             </div>
                             <div>
                               <span className="text-slate-500 block">Start Date</span>
-                              <span className="text-white font-medium">
+                              <span className="text-[var(--color-text-primary)] font-medium">
                                 {guardDetails.profile.training.startDate 
                                   ? new Date(guardDetails.profile.training.startDate).toLocaleDateString()
                                   : 'N/A'}
@@ -582,7 +866,7 @@ export default function UserManagement({ mode }) {
                             </div>
                             <div>
                               <span className="text-slate-500 block">End Date</span>
-                              <span className="text-white font-medium">
+                              <span className="text-[var(--color-text-primary)] font-medium">
                                 {guardDetails.profile.training.endDate 
                                   ? new Date(guardDetails.profile.training.endDate).toLocaleDateString()
                                   : 'N/A'}
@@ -599,429 +883,478 @@ export default function UserManagement({ mode }) {
                   </div>
                 ) : (
                   <>
-                    {/* Modal Tabs Selector */}
-                    <div className="flex border-b border-white/5 pb-0.5 gap-2">
-                  <button
-                    onClick={() => setActiveModalTab('details')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition cursor-pointer ${activeModalTab === 'details'
-                      ? 'border-[#CC9933] text-[#CC9933]'
-                      : 'border-transparent text-slate-400 hover:text-slate-200'
-                      }`}
-                  >
-                    Details
-                  </button>
-                  <button
-                    onClick={() => setActiveModalTab('documents')}
-                    className={`px-4 py-2 text-sm font-bold border-b-2 transition cursor-pointer ${activeModalTab === 'documents'
-                      ? 'border-[#CC9933] text-[#CC9933]'
-                      : 'border-transparent text-slate-400 hover:text-slate-200'
-                      }`}
-                  >
-                    Documents
-                  </button>
-                </div>
-
-                {activeModalTab === 'documents' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {guardDetails.documents && guardDetails.documents.length > 0 ? (
-                      guardDetails.documents.map((doc) => (
-                        <div key={doc._id || doc.documentType} className="neo-flat p-5 border border-white/5 flex flex-col justify-between gap-4">
-                          <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                            <div>
-                              <span className="font-bold text-white text-sm">{getDocTypeName(doc.documentType)}</span>
-                              {doc.title && <p className="text-[10px] text-slate-500">{doc.title}</p>}
-                            </div>
-                            <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${doc.verificationStatus === 'verified'
-                              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                              : doc.verificationStatus === 'rejected'
-                                ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    {/* Step progress */}
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+                        {VERIFY_STEPS.map((step, idx) => {
+                          const Icon = step.icon;
+                          const isActive = activeModalStep === step.id;
+                          const isDone = activeModalStep > step.id;
+                          return (
+                            <button
+                              key={step.id}
+                              type="button"
+                              onClick={() => goToModalStep(step.id)}
+                              className={`flex items-center gap-2 shrink-0 px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer border ${
+                                isActive
+                                  ? 'bg-[#1a56b4]/10 border-[#1a56b4] text-[#1a56b4]'
+                                  : isDone
+                                    ? 'bg-emerald-50 border-emerald-200 text-emerald-600'
+                                    : 'bg-slate-50 border-[#e8ecf1] text-slate-400 hover:text-slate-600'
+                              }`}
+                            >
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                                isActive
+                                  ? 'bg-[#1a56b4] text-white'
+                                  : isDone
+                                    ? 'bg-emerald-500 text-white'
+                                    : 'bg-slate-200 text-slate-500'
                               }`}>
-                              {doc.verificationStatus || 'pending'}
-                            </span>
-                          </div>
-
-                          <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-400 border-b border-white/5 pb-3">
-                            <div>
-                              <span className="text-slate-500 block">Doc Number</span>
-                              <span className="font-semibold text-white break-all">{doc.documentNumber || 'N/A'}</span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500 block">Issue Date</span>
-                              <span className="font-semibold text-white">
-                                {doc.issuedAt ? new Date(doc.issuedAt).toLocaleDateString() : 'N/A'}
+                                {isDone ? '✓' : step.id}
                               </span>
-                            </div>
-                            <div>
-                              <span className="text-slate-500 block">Expiry Date</span>
-                              <span className="font-semibold text-white">
-                                {doc.expiresAt ? new Date(doc.expiresAt).toLocaleDateString() : 'N/A'}
-                              </span>
-                            </div>
-                          </div>
-
-                          {doc.fileUrl ? (
-                            <div className="relative group w-full h-48 bg-[#131720] border border-white/5 rounded-xl overflow-hidden flex items-center justify-center shadow-inner">
-                              <img
-                                src={doc.fileUrl}
-                                alt={getDocTypeName(doc.documentType)}
-                                className="w-full h-full object-cover opacity-80 group-hover:opacity-60 transition duration-200"
-                                onError={(e) => {
-                                  e.target.onerror = null;
-                                  e.target.style.display = 'none';
-                                }}
-                              />
-
-                              {/* Floating action buttons in top right */}
-                              <div className="absolute top-3 right-3 flex items-center gap-2 z-10">
-                                <button
-                                  type="button"
-                                  onClick={() => setZoomedImage(doc.fileUrl)}
-                                  className="w-8 h-8 bg-black/65 hover:bg-[#CC9933] text-white hover:text-black rounded-lg transition shadow-lg flex items-center justify-center cursor-pointer border border-white/10"
-                                  title="Zoom Document"
-                                >
-                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
-                                  </svg>
-                                </button>
-                                <a
-                                  href={doc.fileUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="w-8 h-8 bg-black/65 hover:bg-[#CC9933] text-white hover:text-black rounded-lg transition shadow-lg flex items-center justify-center border border-white/10"
-                                  title="Preview in New Tab"
-                                >
-                                  <ExternalLink size={14} />
-                                </a>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="w-full h-48 bg-black/10 border border-dashed border-white/5 rounded-xl flex items-center justify-center text-xs text-slate-500 italic">
-                              No Document File Uploaded
-                            </div>
-                          )}
-
-                          {/* Document Status and Verify Actions */}
-                          <div className="border-t border-white/5 pt-3 mt-1 flex flex-col gap-2">
-                            {rejectingDocId === doc._id ? (
-                              <div className="flex flex-col gap-2">
-                                <label className="text-[10px] text-slate-400 font-semibold uppercase">Rejection Reason</label>
-                                <div className="flex gap-2">
-                                  <input
-                                    type="text"
-                                    placeholder="e.g. Blurred photo, expired date..."
-                                    value={docRejectReasonInput}
-                                    onChange={(e) => setDocRejectReasonInput(e.target.value)}
-                                    className="flex-1 px-3 py-1.5 bg-[#131720] border border-white/5 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 transition"
-                                    required
-                                  />
-                                  <button
-                                    onClick={() => {
-                                      if (!docRejectReasonInput.trim()) {
-                                        toast.error('Please enter a rejection reason.');
-                                        return;
-                                      }
-                                      handleVerifyDocument(doc._id, 'rejected', docRejectReasonInput);
-                                    }}
-                                    className="px-3 py-1.5 bg-red-500 text-white font-bold text-xs rounded-lg hover:bg-red-600 transition cursor-pointer"
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setRejectingDocId(null);
-                                      setDocRejectReasonInput('');
-                                    }}
-                                    className="px-3 py-1.5 bg-[#2c313d] text-slate-300 font-bold text-xs rounded-lg hover:bg-[#2c313d]/80 transition cursor-pointer"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-center justify-between text-xs">
-                                <div>
-                                  {doc.verificationStatus === 'verified' ? (
-                                    <span className="text-emerald-400 font-bold flex items-center gap-1">
-                                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                      </svg>
-                                      Approved
-                                    </span>
-                                  ) : doc.verificationStatus === 'rejected' ? (
-                                    <div className="text-red-400 font-semibold">
-                                      <span className="block">Rejected</span>
-                                      <span className="text-[10px] text-slate-500 font-normal block max-w-[200px] truncate" title={doc.rejectionReason}>
-                                        Reason: {doc.rejectionReason || 'N/A'}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <span className="text-amber-400 font-bold">Pending Review</span>
-                                  )}
-                                </div>
-
-                                <div className="flex gap-2">
-                                  {doc.verificationStatus !== 'verified' && (
-                                    <button
-                                      onClick={() => handleVerifyDocument(doc._id, 'verified')}
-                                      className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500 text-emerald-400 hover:text-black font-bold text-xs transition cursor-pointer"
-                                    >
-                                      Approve
-                                    </button>
-                                  )}
-                                  {doc.verificationStatus !== 'rejected' && (
-                                    <button
-                                      onClick={() => {
-                                        setRejectingDocId(doc._id);
-                                        setDocRejectReasonInput('');
-                                      }}
-                                      className="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white font-bold text-xs transition cursor-pointer"
-                                    >
-                                      Reject
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="col-span-2 text-center py-12 text-sm text-slate-500 italic">
-                        No documents have been uploaded by this candidate.
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Details Tab Content (Original Modal Body) */
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
-
-                    {/* Left Column: Personal details */}
-                    <div className="space-y-6">
-
-                      {/* Personal Details */}
-                      <div className="bg-black/10 rounded-xl p-4 border border-white/5 space-y-3">
-                        <h4 className="text-xs font-bold text-[#CC9933] uppercase tracking-wider">Personal details</h4>
-                        <div className="grid grid-cols-2 gap-3 text-xs">
-                          <div>
-                            <span className="text-slate-500 block">Full Name</span>
-                            <span className="text-white font-medium">{guardDetails.fullName}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">Email</span>
-                            <span className="text-white font-medium truncate block">{guardDetails.email}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">Phone</span>
-                            <span className="text-white font-medium">{guardDetails.phone || 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">Nationality</span>
-                            <span className="text-white font-medium">{guardDetails.profile?.nationality || 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">Gender</span>
-                            <span className="text-white capitalize font-medium">{guardDetails.profile?.gender || 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">Religion</span>
-                            <span className="text-white font-medium">{guardDetails.profile?.religion || 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">Marital Status</span>
-                            <span className="text-white capitalize font-medium">{guardDetails.profile?.maritalStatus || 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">Experience</span>
-                            <span className="text-white font-medium">{guardDetails.profile?.yearsOfExperience ?? 0} Years</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Address Details */}
-                      <div className="bg-black/10 rounded-xl p-4 border border-white/5 space-y-2">
-                        <h4 className="text-xs font-bold text-[#CC9933] uppercase tracking-wider">Residential Address</h4>
-                        <div className="text-xs text-slate-300 space-y-1">
-                          <p><span className="text-slate-500">Street:</span> {guardDetails.address?.addressLine1}</p>
-                          {guardDetails.address?.addressLine2 && <p><span className="text-slate-500">L2:</span> {guardDetails.address.addressLine2}</p>}
-                          <p><span className="text-slate-500">Location:</span> {guardDetails.address?.city}, {guardDetails.address?.region}, {guardDetails.address?.country}</p>
-                          <p><span className="text-slate-500">Postal:</span> {guardDetails.address?.postalCode || 'N/A'}</p>
-                        </div>
-                      </div>
-
-                      {/* Physical Specifications & Payout */}
-                      <div className="bg-black/10 rounded-xl p-4 border border-white/5 space-y-3">
-                        <h4 className="text-xs font-bold text-[#CC9933] uppercase tracking-wider">Physical Specifications & Payout</h4>
-                        <div className="grid grid-cols-4 gap-2 text-xs">
-                          <div>
-                            <span className="text-slate-500 block">Height</span>
-                            <span className="text-white font-medium">{guardDetails.verification?.heightCm ? `${guardDetails.verification.heightCm} cm` : 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">Weight</span>
-                            <span className="text-white font-medium">{guardDetails.verification?.weightKg ? `${guardDetails.verification.weightKg} kg` : 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">BMI</span>
-                            <span className="text-white font-medium">{guardDetails.verification?.bmi || 'N/A'}</span>
-                          </div>
-                          <div>
-                            <span className="text-slate-500 block">SSNIT</span>
-                            <span className="text-white font-medium">{guardDetails.verification?.ssnitNumber || 'N/A'}</span>
-                          </div>
-                        </div>
-
-                        <div className="border-t border-white/5 pt-2 mt-2">
-                          <span className="text-[10px] font-bold text-[#CC9933] block uppercase mb-1">Payout MoMo / Bank</span>
-                          {guardDetails.verification?.paymentDetails?.paymentMethod ? (
-                            <div className="text-xs text-slate-300">
-                              <p><span className="text-slate-500">Method:</span> <span className="capitalize">{guardDetails.verification.paymentDetails.paymentMethod?.replace('_', ' ')}</span></p>
-                              {guardDetails.verification.paymentDetails.paymentMethod === 'mobile_money' ? (
-                                <p><span className="text-slate-500">MoMo:</span> {guardDetails.verification.paymentDetails.mobileMoneyProvider} ({guardDetails.verification.paymentDetails.mobileMoneyNumber})</p>
-                              ) : (
-                                <p><span className="text-slate-500">Bank:</span> {guardDetails.verification.paymentDetails.bankName} - Acct: {guardDetails.verification.paymentDetails.accountNumber}</p>
+                              <Icon size={14} />
+                              <span className="hidden sm:inline">{step.label}</span>
+                              {idx < VERIFY_STEPS.length - 1 && (
+                                <span className="hidden md:inline text-slate-300 ml-1">›</span>
                               )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-500 block italic">Not set</span>
-                          )}
-                        </div>
+                            </button>
+                          );
+                        })}
                       </div>
-
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        Step {activeModalStep} of {VERIFY_STEPS.length}: {VERIFY_STEPS[activeModalStep - 1]?.label}
+                      </p>
                     </div>
 
-                    {/* Right Column: Kin & Guarantor */}
-                    <div className="space-y-6">
+                    {/* Step 1: Address */}
+                    {activeModalStep === 1 && (
+                      <div className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-4 text-sm">
+                        <h4 className="text-xs font-bold text-[#1a56b4] uppercase tracking-wider flex items-center gap-2">
+                          <MapPin size={14} /> Residential Address
+                        </h4>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                          <div>
+                            <span className="text-slate-500 block">Address Line 1</span>
+                            <span className="text-slate-800 font-medium">{guardDetails.address?.addressLine1 || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">Address Line 2</span>
+                            <span className="text-slate-800 font-medium">{guardDetails.address?.addressLine2 || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">City</span>
+                            <span className="text-slate-800 font-medium">{guardDetails.address?.city || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">Region</span>
+                            <span className="text-slate-800 font-medium">{guardDetails.address?.region || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">Country</span>
+                            <span className="text-slate-800 font-medium">{guardDetails.address?.country || 'N/A'}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">Postal Code</span>
+                            <span className="text-slate-800 font-medium">{guardDetails.address?.postalCode || 'N/A'}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-black/10 rounded-xl p-4 border border-white/5 space-y-2 text-xs">
-                          <h5 className="font-bold text-[#CC9933] uppercase">Next of Kin</h5>
-                          <p className="font-semibold text-white truncate">{guardDetails.verification?.nextOfKin?.fullName || 'N/A'}</p>
-                          <p className="text-slate-500">{guardDetails.verification?.nextOfKin?.relationship} ({guardDetails.verification?.nextOfKin?.phone})</p>
+                    {/* Step 2: Profile */}
+                    {activeModalStep === 2 && (
+                      <div className="space-y-4 text-sm">
+                        <div className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-4">
+                          <h4 className="text-xs font-bold text-[#1a56b4] uppercase tracking-wider flex items-center gap-2">
+                            <User size={14} /> Personal & Guard Profile
+                          </h4>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                            <div>
+                              <span className="text-slate-500 block">Full Name</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.fullName || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Email</span>
+                              <span className="text-slate-800 font-medium break-all">{guardDetails.email || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Phone</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.phone || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Date of Birth</span>
+                              <span className="text-slate-800 font-medium">{formatDate(guardDetails.profile?.dateOfBirth)}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Nationality</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.profile?.nationality || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Gender</span>
+                              <span className="text-slate-800 capitalize font-medium">{guardDetails.profile?.gender || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Religion</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.profile?.religion || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Marital Status</span>
+                              <span className="text-slate-800 capitalize font-medium">{guardDetails.profile?.maritalStatus || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Experience</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.profile?.yearsOfExperience ?? 0} Years</span>
+                            </div>
+                            <div className="col-span-2 md:col-span-3">
+                              <span className="text-slate-500 block">Languages</span>
+                              <span className="text-slate-800 font-medium">
+                                {guardDetails.profile?.languages?.length
+                                  ? guardDetails.profile.languages.join(', ')
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                            <div className="col-span-2 md:col-span-3">
+                              <span className="text-slate-500 block">Bio</span>
+                              <span className="text-slate-800 font-medium whitespace-pre-wrap">
+                                {guardDetails.profile?.bio || 'N/A'}
+                              </span>
+                            </div>
+                          </div>
                         </div>
 
-                        <div className="bg-black/10 rounded-xl p-4 border border-white/5 space-y-2 text-xs">
-                          <h5 className="font-bold text-[#CC9933] uppercase">Guarantor</h5>
-                          <p className="font-semibold text-white truncate">{guardDetails.verification?.guarantor?.fullName || 'N/A'}</p>
-                          <p className="text-slate-500">{guardDetails.verification?.guarantor?.phone}</p>
-                          {guardDetails.verification?.guarantor?.ghanaCardFile?.url && (
-                            <a
-                              href={guardDetails.verification.guarantor.ghanaCardFile.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[10px] text-[#CC9933] hover:underline flex items-center gap-1 font-semibold"
-                            >
-                              <ExternalLink size={10} />
-                              <span>View Guarantor ID</span>
-                            </a>
+                        <div className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-3">
+                          <h4 className="text-xs font-bold text-[#1a56b4] uppercase tracking-wider">Education</h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                            <div>
+                              <span className="text-slate-500 block">Level</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.profile?.education?.level || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Institution</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.profile?.education?.institution || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Qualification</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.profile?.education?.qualification || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Years</span>
+                              <span className="text-slate-800 font-medium">
+                                {guardDetails.profile?.education?.yearStarted || guardDetails.profile?.education?.yearCompleted
+                                  ? `${guardDetails.profile?.education?.yearStarted || '—'} – ${guardDetails.profile?.education?.yearCompleted || '—'}`
+                                  : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 3: Documents */}
+                    {activeModalStep === 3 && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-[#1a56b4] uppercase tracking-wider flex items-center gap-2">
+                            <FileText size={14} /> Identity & Supporting Documents
+                          </h4>
+                          <span className="text-[10px] text-slate-500 font-semibold">
+                            {guardDetails.documents?.length || 0} file(s)
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {guardDetails.documents && guardDetails.documents.length > 0 ? (
+                            guardDetails.documents.map((doc) => renderDocumentCard(doc))
+                          ) : (
+                            <div className="col-span-2 text-center py-12 text-sm text-slate-500 italic">
+                              No documents have been uploaded by this candidate.
+                            </div>
                           )}
                         </div>
                       </div>
+                    )}
 
-                      {guardDetails.trainings && guardDetails.trainings.length > 0 ? (
-                        <div className="space-y-4 mt-4">
-                          <h5 className="font-bold text-[#CC9933] uppercase tracking-wider text-[10px]">Training History ({guardDetails.trainings.length})</h5>
-                          
-                          {guardDetails.trainings.map((t) => (
-                            <div key={t._id} className="bg-[#131720] rounded-xl p-4 border border-white/5 space-y-3">
-                              <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                                <span className="font-bold text-white text-sm">{t.trainingName}</span>
-                                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${
-                                  t.status === 'completed'
-                                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                                    : t.status === 'failed' || t.status === 'cancelled'
-                                    ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                                }`}>
-                                  {t.status?.replace('_', ' ')}
+                    {/* Step 4: Verification */}
+                    {activeModalStep === 4 && (
+                      <div className="space-y-4 text-sm">
+                        <div className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-4">
+                          <h4 className="text-xs font-bold text-[#1a56b4] uppercase tracking-wider flex items-center gap-2">
+                            <ShieldCheck size={14} /> Physical Specifications
+                          </h4>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                            <div>
+                              <span className="text-slate-500 block">Height</span>
+                              <span className="text-slate-800 font-medium">
+                                {guardDetails.verification?.heightCm ? `${guardDetails.verification.heightCm} cm` : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Weight</span>
+                              <span className="text-slate-800 font-medium">
+                                {guardDetails.verification?.weightKg ? `${guardDetails.verification.weightKg} kg` : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">BMI</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.verification?.bmi || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">SSNIT Number</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.verification?.ssnitNumber || 'N/A'}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-3">
+                          <h4 className="text-xs font-bold text-[#1a56b4] uppercase tracking-wider">Payout Details</h4>
+                          {guardDetails.verification?.paymentDetails?.paymentMethod ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                              <div>
+                                <span className="text-slate-500 block">Method</span>
+                                <span className="text-slate-800 font-medium capitalize">
+                                  {guardDetails.verification.paymentDetails.paymentMethod?.replace('_', ' ')}
                                 </span>
                               </div>
-
-                              <div className="grid grid-cols-2 gap-3.5 text-xs">
-                                <div>
-                                  <span className="text-slate-500 block">Location</span>
-                                  <span className="text-white font-medium">{t.location || 'N/A'}</span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-500 block">Start Date</span>
-                                  <span className="text-white font-medium">
-                                    {t.startDate ? new Date(t.startDate).toLocaleDateString() : 'N/A'}
-                                  </span>
-                                </div>
-                                <div>
-                                  <span className="text-slate-500 block">End Date</span>
-                                  <span className="text-white font-medium">
-                                    {t.endDate ? new Date(t.endDate).toLocaleDateString() : 'N/A'}
-                                  </span>
-                                </div>
-                                {t.score !== null && (
+                              {guardDetails.verification.paymentDetails.paymentMethod === 'mobile_money' ? (
+                                <>
                                   <div>
-                                    <span className="text-slate-500 block">Score</span>
-                                    <span className="text-white font-medium">{t.score}</span>
-                                  </div>
-                                )}
-                                {t.completedAt && (
-                                  <div>
-                                    <span className="text-slate-500 block">Completed At</span>
-                                    <span className="text-white font-medium">
-                                      {new Date(t.completedAt).toLocaleDateString()}
+                                    <span className="text-slate-500 block">Provider</span>
+                                    <span className="text-slate-800 font-medium">
+                                      {guardDetails.verification.paymentDetails.mobileMoneyProvider || 'N/A'}
                                     </span>
                                   </div>
-                                )}
-                              </div>
-                              {t.remarks && (
-                                <div className="border-t border-white/5 pt-2 mt-2">
-                                  <span className="text-[10px] text-slate-500 block">Remarks</span>
-                                  <span className="text-xs text-slate-300 font-medium">{t.remarks}</span>
-                                </div>
+                                  <div>
+                                    <span className="text-slate-500 block">MoMo Number</span>
+                                    <span className="text-slate-800 font-medium">
+                                      {guardDetails.verification.paymentDetails.mobileMoneyNumber || 'N/A'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500 block">Account Name</span>
+                                    <span className="text-slate-800 font-medium">
+                                      {guardDetails.verification.paymentDetails.mobileMoneyAccountName || 'N/A'}
+                                    </span>
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div>
+                                    <span className="text-slate-500 block">Bank</span>
+                                    <span className="text-slate-800 font-medium">
+                                      {guardDetails.verification.paymentDetails.bankName || 'N/A'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500 block">Account Name</span>
+                                    <span className="text-slate-800 font-medium">
+                                      {guardDetails.verification.paymentDetails.accountName || 'N/A'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500 block">Account Number</span>
+                                    <span className="text-slate-800 font-medium">
+                                      {guardDetails.verification.paymentDetails.accountNumber || 'N/A'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500 block">Branch</span>
+                                    <span className="text-slate-800 font-medium">
+                                      {guardDetails.verification.paymentDetails.branchName || 'N/A'}
+                                    </span>
+                                  </div>
+                                </>
                               )}
                             </div>
-                          ))}
+                          ) : (
+                            <span className="text-xs text-slate-500 italic">Not set</span>
+                          )}
                         </div>
-                      ) : (
-                        guardDetails.profile?.training?.name && (
-                          <div className="bg-[#131720] rounded-xl p-4 border border-white/5 space-y-3 mt-4">
-                            <h5 className="font-bold text-[#CC9933] uppercase tracking-wider text-[10px]">Training Parameters</h5>
-                            <div className="grid grid-cols-2 gap-3.5 text-xs">
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-3 text-xs">
+                            <h5 className="font-bold text-[#1a56b4] uppercase tracking-wider">Next of Kin</h5>
+                            <div>
+                              <span className="text-slate-500 block">Full Name</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.verification?.nextOfKin?.fullName || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Relationship</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.verification?.nextOfKin?.relationship || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Phone</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.verification?.nextOfKin?.phone || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Address</span>
+                              <span className="text-slate-800 font-medium">{formatAddress(guardDetails.verification?.nextOfKin?.address)}</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-3 text-xs">
+                            <h5 className="font-bold text-[#1a56b4] uppercase tracking-wider">Guarantor</h5>
+                            <div>
+                              <span className="text-slate-500 block">Full Name</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.verification?.guarantor?.fullName || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Relationship</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.verification?.guarantor?.relationship || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Phone</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.verification?.guarantor?.phone || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Occupation</span>
+                              <span className="text-slate-800 font-medium">{guardDetails.verification?.guarantor?.occupation || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Address</span>
+                              <span className="text-slate-800 font-medium">{formatAddress(guardDetails.verification?.guarantor?.address)}</span>
+                            </div>
+                            <div>
+                              <span className="text-slate-500 block">Ghana Card No.</span>
+                              <span className="text-slate-800 font-medium">
+                                {guardDetails.verification?.guarantor?.ghanaCard?.cardNumber
+                                  || guardDetails.verification?.guarantor?.ghanaCardFile?.cardNumber
+                                  || 'N/A'}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                              {(() => {
+                                const { front, back } = getGuarantorIdImages(guardDetails.verification?.guarantor);
+                                return (
+                                  <>
+                                    {renderIdImage(front, 'ID Front')}
+                                    {renderIdImage(back, 'ID Back')}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Step 5: Review */}
+                    {activeModalStep === 5 && (
+                      <div className="space-y-4 text-sm">
+                        <div className="bg-slate-50 rounded-xl p-5 border border-[#e8ecf1] space-y-3">
+                          <h4 className="text-xs font-bold text-[#1a56b4] uppercase tracking-wider flex items-center gap-2">
+                            <FileCheck size={14} /> Application Summary
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            {[
+                              { step: 1, label: 'Address', value: formatAddress(guardDetails.address) },
+                              { step: 2, label: 'Profile', value: `${guardDetails.fullName || 'N/A'} · ${guardDetails.profile?.nationality || 'N/A'} · ${guardDetails.profile?.yearsOfExperience ?? 0} yrs exp` },
+                              { step: 3, label: 'Documents', value: `${guardDetails.documents?.length || 0} uploaded · ${(guardDetails.documents || []).filter((d) => d.verificationStatus === 'verified').length} approved · ${(guardDetails.documents || []).filter((d) => d.verificationStatus === 'rejected').length} rejected · ${(guardDetails.documents || []).filter((d) => !d.verificationStatus || d.verificationStatus === 'pending').length} pending` },
+                              { step: 4, label: 'Verification', value: `SSNIT ${guardDetails.verification?.ssnitNumber || 'N/A'} · Kin ${guardDetails.verification?.nextOfKin?.fullName || 'N/A'} · Guarantor ${guardDetails.verification?.guarantor?.fullName || 'N/A'}` },
+                            ].map((item) => (
+                              <button
+                                key={item.step}
+                                type="button"
+                                onClick={() => goToModalStep(item.step)}
+                                className="text-left p-3 rounded-xl border border-[#e8ecf1] bg-white hover:border-[#1a56b4]/40 transition cursor-pointer"
+                              >
+                                <span className="text-[10px] font-bold text-[#1a56b4] uppercase tracking-wider block mb-1">
+                                  Step {item.step}: {item.label}
+                                </span>
+                                <span className="text-slate-700 font-medium line-clamp-2">{item.value}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {guardDetails.trainings && guardDetails.trainings.length > 0 ? (
+                          <div className="space-y-3">
+                            <h5 className="font-bold text-[#1a56b4] uppercase tracking-wider text-[10px]">
+                              Training History ({guardDetails.trainings.length})
+                            </h5>
+                            {guardDetails.trainings.map((t) => (
+                              <div key={t._id} className="bg-slate-50 rounded-xl p-4 border border-[#e8ecf1] space-y-3">
+                                <div className="flex items-center justify-between border-b border-[#e8ecf1] pb-2">
+                                  <span className="font-bold text-slate-800 text-sm">{t.trainingName}</span>
+                                  <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded border uppercase tracking-wider ${
+                                    t.status === 'completed'
+                                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                      : t.status === 'failed' || t.status === 'cancelled'
+                                        ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                        : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                  }`}>
+                                    {t.status?.replace('_', ' ')}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 text-xs">
+                                  <div>
+                                    <span className="text-slate-500 block">Location</span>
+                                    <span className="text-slate-800 font-medium">{t.location || 'N/A'}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-slate-500 block">Dates</span>
+                                    <span className="text-slate-800 font-medium">
+                                      {formatDate(t.startDate)} – {formatDate(t.endDate)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : guardDetails.profile?.training?.name ? (
+                          <div className="bg-slate-50 rounded-xl p-4 border border-[#e8ecf1] space-y-3">
+                            <h5 className="font-bold text-[#1a56b4] uppercase tracking-wider text-[10px]">Training Parameters</h5>
+                            <div className="grid grid-cols-2 gap-3 text-xs">
                               <div>
                                 <span className="text-slate-500 block">Training Name</span>
-                                <span className="text-white font-medium">{guardDetails.profile.training.name}</span>
+                                <span className="text-slate-800 font-medium">{guardDetails.profile.training.name}</span>
                               </div>
                               <div>
                                 <span className="text-slate-500 block">Location</span>
-                                <span className="text-white font-medium">{guardDetails.profile.training.location || 'N/A'}</span>
+                                <span className="text-slate-800 font-medium">{guardDetails.profile.training.location || 'N/A'}</span>
                               </div>
                               <div>
                                 <span className="text-slate-500 block">Start Date</span>
-                                <span className="text-white font-medium">
-                                  {guardDetails.profile.training.startDate 
-                                    ? new Date(guardDetails.profile.training.startDate).toLocaleDateString()
-                                    : 'N/A'}
-                                </span>
+                                <span className="text-slate-800 font-medium">{formatDate(guardDetails.profile.training.startDate)}</span>
                               </div>
                               <div>
                                 <span className="text-slate-500 block">End Date</span>
-                                <span className="text-white font-medium">
-                                  {guardDetails.profile.training.endDate 
-                                    ? new Date(guardDetails.profile.training.endDate).toLocaleDateString()
-                                    : 'N/A'}
-                                </span>
+                                <span className="text-slate-800 font-medium">{formatDate(guardDetails.profile.training.endDate)}</span>
                               </div>
                             </div>
                           </div>
-                        )
-                      )}
+                        ) : null}
+                      </div>
+                    )}
 
+                    {/* Step navigation */}
+                    <div className="flex items-center justify-between gap-3 pt-2 border-t border-[#e8ecf1]">
+                      <button
+                        type="button"
+                        onClick={() => goToModalStep(activeModalStep - 1)}
+                        disabled={activeModalStep <= 1}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold border border-[#e8ecf1] text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                      >
+                        <ChevronLeft size={14} />
+                        Back
+                      </button>
+                      <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                        {VERIFY_STEPS[activeModalStep - 1]?.label}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => goToModalStep(activeModalStep + 1)}
+                        disabled={activeModalStep >= VERIFY_STEPS.length}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-[#1a56b4] text-white hover:bg-[#154a9a] disabled:opacity-40 disabled:cursor-not-allowed transition cursor-pointer"
+                      >
+                        Next
+                        <ChevronRight size={14} />
+                      </button>
                     </div>
-
-                  </div>
+                  </>
                 )}
-              </>
-            )}
 
                 {/* Modal Actions */}
                 {mode !== 'verified' && mode !== 'training' && (
-                  <div className="border-t border-white/5 pt-4 flex flex-col sm:flex-row gap-3 items-end sm:items-center justify-end">
+                  <div className="border-t border-[#e8ecf1] pt-4 flex flex-col sm:flex-row gap-3 items-end sm:items-center justify-end">
                     {rejecting ? (
                       <div className="w-full flex flex-col gap-2">
                         <label className="text-xs text-slate-400 font-medium ml-1">Rejection Reason</label>
@@ -1031,7 +1364,7 @@ export default function UserManagement({ mode }) {
                             placeholder="Explain why this profile is rejected (e.g. invalid SSNIT, blur photo)..."
                             value={rejectionReason}
                             onChange={(e) => setRejectionReason(e.target.value)}
-                            className="flex-1 px-3 py-2 bg-[#131720] border border-white/5 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 transition"
+                            className="flex-1 px-3 py-2 bg-slate-50 border border-[#e8ecf1] rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-red-500 transition"
                             required
                           />
                           <button
@@ -1056,7 +1389,7 @@ export default function UserManagement({ mode }) {
                               handleVerify(guardDetails._id, 'partially_rejected', rejectionReason);
                             }}
                             disabled={submittingAction}
-                            className="px-4 py-2 bg-amber-500 text-white font-bold text-xs rounded-xl hover:bg-amber-600 transition cursor-pointer whitespace-nowrap"
+                            className="px-4 py-2 bg-amber-500 text-slate-800 font-bold text-xs rounded-xl hover:bg-amber-600 transition cursor-pointer whitespace-nowrap"
                           >
                             Partial Reject
                           </button>
@@ -1065,14 +1398,20 @@ export default function UserManagement({ mode }) {
                               setRejecting(false);
                               setRejectionReason('');
                             }}
-                            className="px-4 py-2 bg-[#2c313d] text-slate-300 font-bold text-xs rounded-xl hover:bg-[#2c313d]/80 transition cursor-pointer whitespace-nowrap"
+                            className="px-4 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-100/80 transition cursor-pointer whitespace-nowrap"
                           >
                             Cancel
                           </button>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex gap-3">
+                      <div className="flex flex-col items-end gap-2">
+                        {!approveVerifyGate.canApprove && (
+                          <p className="text-[11px] text-amber-600 font-medium text-right max-w-md">
+                            {approveVerifyGate.reason || 'Approve all documents in the Documents step first.'}
+                          </p>
+                        )}
+                        <div className="flex gap-3">
                         <button
                           onClick={() => setRejecting(true)}
                           disabled={submittingAction}
@@ -1083,6 +1422,10 @@ export default function UserManagement({ mode }) {
                         </button>
                         <button
                           onClick={async () => {
+                            if (!approveVerifyGate.canApprove) {
+                              toast.error(approveVerifyGate.reason || 'Approve all documents first.');
+                              return;
+                            }
                             setSubmittingAction(true);
                             try {
                               const response = await apiRequest(`/admin/users/guards/${guardDetails._id}/check-verify-eligibility`, {
@@ -1108,8 +1451,9 @@ export default function UserManagement({ mode }) {
                               setSubmittingAction(false);
                             }
                           }}
-                          disabled={submittingAction}
-                          className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                          disabled={submittingAction || !approveVerifyGate.canApprove}
+                          title={approveVerifyGate.reason || 'Approve & verify application'}
+                          className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-emerald-500"
                         >
                           {submittingAction ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1118,6 +1462,7 @@ export default function UserManagement({ mode }) {
                           )}
                           <span>Approve & Verify</span>
                         </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1139,7 +1484,7 @@ export default function UserManagement({ mode }) {
                     }
 
                     return (
-                      <div className="border-t border-white/5 pt-4">
+                      <div className="border-t border-[#e8ecf1] pt-4">
                         {rejecting ? (
                           <div className="w-full flex flex-col gap-2">
                             <label className="text-xs text-slate-400 font-medium ml-1">Rejection Reason</label>
@@ -1149,7 +1494,7 @@ export default function UserManagement({ mode }) {
                                 placeholder="Explain why this certificate is rejected..."
                                 value={rejectionReason}
                                 onChange={(e) => setRejectionReason(e.target.value)}
-                                className="flex-1 px-3 py-2 bg-[#131720] border border-white/5 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500 transition"
+                                className="flex-1 px-3 py-2 bg-slate-50 border border-[#e8ecf1] rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-red-500 transition"
                                 required
                               />
                               <button
@@ -1186,7 +1531,7 @@ export default function UserManagement({ mode }) {
                                   setRejecting(false);
                                   setRejectionReason('');
                                 }}
-                                className="px-4 py-2 bg-[#2c313d] text-slate-300 font-bold text-xs rounded-xl hover:bg-[#2c313d]/80 transition cursor-pointer whitespace-nowrap"
+                                className="px-4 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-xl hover:bg-slate-100/80 transition cursor-pointer whitespace-nowrap"
                               >
                                 Cancel
                               </button>
@@ -1220,7 +1565,7 @@ export default function UserManagement({ mode }) {
                                 }
                               }}
                               disabled={submittingAction}
-                              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                              className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-1.5"
                             >
                               {submittingAction ? (
                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1248,10 +1593,10 @@ export default function UserManagement({ mode }) {
           onClick={() => setZoomedImage(null)}
           className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 cursor-zoom-out"
         >
-          <div className="relative max-w-4xl max-h-[85vh] overflow-hidden rounded-2xl border border-white/10 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="relative max-w-4xl max-h-[85vh] overflow-hidden rounded-2xl border border-[var(--color-border)] shadow-[var(--shadow-card)] animate-in zoom-in-95 duration-200">
             <button
               onClick={() => setZoomedImage(null)}
-              className="absolute top-4 right-4 z-10 p-2 bg-black/70 hover:bg-[#CC9933] text-white hover:text-black rounded-full transition shadow-md cursor-pointer"
+              className="absolute top-4 right-4 z-10 p-2 bg-black/70 hover:bg-[#1a56b4] text-white hover:text-black rounded-full transition shadow-md cursor-pointer"
             >
               <X size={20} />
             </button>
@@ -1268,16 +1613,16 @@ export default function UserManagement({ mode }) {
       {/* Verify Application Modal Form */}
       {showVerifyModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
-          <div className="w-full max-w-md bg-[#1e222a] border border-white/5 rounded-2xl p-6 shadow-2xl space-y-5 relative animate-in zoom-in-95 duration-200">
+          <div className="w-full max-w-md bg-white border border-[#e8ecf1] rounded-2xl p-6 shadow-[var(--shadow-card)] space-y-5 relative animate-in zoom-in-95 duration-200">
             <button
               onClick={handleCloseVerifyModal}
-              className="absolute right-4 top-4 p-1.5 text-slate-400 hover:text-white rounded-lg bg-white/5 transition cursor-pointer"
+              className="absolute right-4 top-4 p-1.5 text-slate-400 hover:text-[var(--color-text-primary)] rounded-lg bg-slate-100 transition cursor-pointer"
             >
               <X size={16} />
             </button>
 
             <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
                 <UserCheck size={18} className="text-emerald-400" />
                 <span>Verify & Approve Guard</span>
               </h3>
@@ -1313,23 +1658,23 @@ export default function UserManagement({ mode }) {
               className="space-y-4"
             >
               <div className="space-y-1">
-                <label className="text-xs text-slate-300 font-semibold">Guard ID <span className="text-red-500">*</span></label>
+                <label className="text-xs text-slate-600 font-semibold">Guard ID <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. W247-G001"
                   value={verifyForm.guardId}
                   onChange={(e) => setVerifyForm({ ...verifyForm, guardId: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#131720] border border-white/5 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#CC9933] transition"
+                  className="w-full px-3 py-2 bg-slate-50 border border-[#e8ecf1] rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#1a56b4] transition"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-slate-300 font-semibold">Grade <span className="text-red-500">*</span></label>
+                <label className="text-xs text-slate-600 font-semibold">Grade <span className="text-red-500">*</span></label>
                 <select
                   value={verifyForm.grade}
                   onChange={(e) => setVerifyForm({ ...verifyForm, grade: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#131720] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#CC9933] transition cursor-pointer"
+                  className="w-full px-3 py-2 bg-slate-50 border border-[#e8ecf1] rounded-xl text-sm text-slate-800 focus:outline-none focus:border-[#1a56b4] transition cursor-pointer"
                 >
                   {['A', 'B', 'C', 'D', 'E', 'F'].map((g) => (
                     <option key={g} value={g}>{g}</option>
@@ -1338,47 +1683,47 @@ export default function UserManagement({ mode }) {
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-slate-300 font-semibold">Training Name <span className="text-red-500">*</span></label>
+                <label className="text-xs text-slate-600 font-semibold">Training Name <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Basic Onboarding and Physical Training"
                   value={verifyForm.trainingName}
                   onChange={(e) => setVerifyForm({ ...verifyForm, trainingName: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#131720] border border-white/5 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#CC9933] transition"
+                  className="w-full px-3 py-2 bg-slate-50 border border-[#e8ecf1] rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#1a56b4] transition"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-300 font-semibold">Start Date <span className="text-red-500">*</span></label>
+                  <label className="text-xs text-slate-600 font-semibold">Start Date <span className="text-red-500">*</span></label>
                   <input
                     type="date"
                     required
                     value={verifyForm.trainingStartDate}
                     onChange={(e) => setVerifyForm({ ...verifyForm, trainingStartDate: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#131720] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#CC9933] transition cursor-pointer"
+                    className="w-full px-3 py-2 bg-slate-50 border border-[#e8ecf1] rounded-xl text-sm text-slate-800 focus:outline-none focus:border-[#1a56b4] transition cursor-pointer"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-300 font-semibold">End Date (Optional)</label>
+                  <label className="text-xs text-slate-600 font-semibold">End Date (Optional)</label>
                   <input
                     type="date"
                     value={verifyForm.trainingEndDate}
                     onChange={(e) => setVerifyForm({ ...verifyForm, trainingEndDate: e.target.value })}
-                    className="w-full px-3 py-2 bg-[#131720] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#CC9933] transition cursor-pointer"
+                    className="w-full px-3 py-2 bg-slate-50 border border-[#e8ecf1] rounded-xl text-sm text-slate-800 focus:outline-none focus:border-[#1a56b4] transition cursor-pointer"
                   />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-xs text-slate-300 font-semibold">Training Location (Optional)</label>
+                <label className="text-xs text-slate-600 font-semibold">Training Location (Optional)</label>
                 <input
                   type="text"
                   placeholder="e.g. Main Training Center HQ"
                   value={verifyForm.trainingLocation}
                   onChange={(e) => setVerifyForm({ ...verifyForm, trainingLocation: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#131720] border border-white/5 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-[#CC9933] transition"
+                  className="w-full px-3 py-2 bg-slate-50 border border-[#e8ecf1] rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#1a56b4] transition"
                 />
               </div>
 
@@ -1386,14 +1731,14 @@ export default function UserManagement({ mode }) {
                 <button
                   type="button"
                   onClick={handleCloseVerifyModal}
-                  className="flex-1 py-2 bg-[#2c313d] hover:bg-[#2c313d]/80 text-slate-300 font-bold text-xs rounded-xl transition cursor-pointer"
+                  className="flex-1 py-2 bg-slate-100 hover:bg-slate-100/80 text-slate-600 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={submittingAction}
-                  className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-black font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+                  className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   {submittingAction ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -1,6 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage.jsx';
 import UserManagement from './pages/UserManagement.jsx';
+import CalendarPage from './pages/CalendarPage.jsx';
+import InboxPage from './pages/InboxPage.jsx';
+import HomePage from './pages/HomePage.jsx';
+import LiveGuardServicePage from './pages/LiveGuardServicePage.jsx';
+import PlaceholderPage from './pages/PlaceholderPage.jsx';
 import DashboardLayout from './components/DashboardLayout.jsx';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
@@ -10,6 +15,14 @@ function PrivateRoute({ children }) {
   return token ? children : <Navigate to="/login" replace />;
 }
 
+function LayoutRoute({ children }) {
+  return (
+    <PrivateRoute>
+      <DashboardLayout>{children}</DashboardLayout>
+    </PrivateRoute>
+  );
+}
+
 function App() {
   return (
     <>
@@ -17,40 +30,132 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          
-          <Route path="/users/verified-guards" element={
-            <PrivateRoute>
-              <DashboardLayout>
+
+          <Route
+            path="/home"
+            element={
+              <LayoutRoute>
+                <HomePage />
+              </LayoutRoute>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <LayoutRoute>
+                <PlaceholderPage title="Dashboard" />
+              </LayoutRoute>
+            }
+          />
+          <Route
+            path="/live-guard-service"
+            element={
+              <LayoutRoute>
+                <LiveGuardServicePage />
+              </LayoutRoute>
+            }
+          />
+          <Route
+            path="/invoices"
+            element={
+              <LayoutRoute>
+                <PlaceholderPage title="Invoices" />
+              </LayoutRoute>
+            }
+          />
+          <Route
+            path="/chat-room"
+            element={
+              <LayoutRoute>
+                <PlaceholderPage title="Chat Room" />
+              </LayoutRoute>
+            }
+          />
+          <Route
+            path="/help-center"
+            element={
+              <LayoutRoute>
+                <PlaceholderPage title="Help Center" />
+              </LayoutRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <LayoutRoute>
+                <PlaceholderPage title="Reports" />
+              </LayoutRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <LayoutRoute>
+                <PlaceholderPage title="Settings" />
+              </LayoutRoute>
+            }
+          />
+
+          <Route
+            path="/inbox"
+            element={
+              <LayoutRoute>
+                <InboxPage />
+              </LayoutRoute>
+            }
+          />
+
+          <Route
+            path="/calendar"
+            element={
+              <LayoutRoute>
+                <CalendarPage />
+              </LayoutRoute>
+            }
+          />
+
+          <Route
+            path="/users/verified-guards"
+            element={
+              <LayoutRoute>
                 <UserManagement mode="verified" />
-              </DashboardLayout>
-            </PrivateRoute>
-          } />
-          
-          <Route path="/users/under-review" element={
-            <PrivateRoute>
-              <DashboardLayout>
+              </LayoutRoute>
+            }
+          />
+
+          <Route
+            path="/users/under-review"
+            element={
+              <LayoutRoute>
                 <UserManagement mode="review" />
-              </DashboardLayout>
-            </PrivateRoute>
-          } />
+              </LayoutRoute>
+            }
+          />
 
-          <Route path="/users/under-training" element={
-            <PrivateRoute>
-              <DashboardLayout>
+          <Route
+            path="/users/under-training"
+            element={
+              <LayoutRoute>
                 <UserManagement mode="training" />
-              </DashboardLayout>
-            </PrivateRoute>
-          } />
-          
-          <Route path="/users/clients" element={
-            <PrivateRoute>
-              <DashboardLayout>
-                <UserManagement mode="clients" />
-              </DashboardLayout>
-            </PrivateRoute>
-          } />
+              </LayoutRoute>
+            }
+          />
 
-          <Route path="*" element={<Navigate to="/users/verified-guards" replace />} />
+          <Route
+            path="/users/clients"
+            element={
+              <LayoutRoute>
+                <UserManagement mode="clients" />
+              </LayoutRoute>
+            }
+          />
+
+          <Route
+            path="/complaints"
+            element={<Navigate to="/inbox?tab=complaints" replace />}
+          />
+
+          <Route path="*" element={<Navigate to="/home" replace />} />
         </Routes>
       </BrowserRouter>
     </>
