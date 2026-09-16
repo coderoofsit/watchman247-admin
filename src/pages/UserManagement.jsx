@@ -188,6 +188,8 @@ export default function UserManagement({ mode }) {
       item.fullName?.toLowerCase().includes(term) ||
       item.email?.toLowerCase().includes(term) ||
       item.phone?.includes(term) ||
+      (item.clientId && item.clientId.toLowerCase().includes(term)) ||
+      (item.guardId && item.guardId.toLowerCase().includes(term)) ||
       (item.profile?.guardId && item.profile.guardId.toLowerCase().includes(term))
     );
   });
@@ -519,6 +521,7 @@ export default function UserManagement({ mode }) {
                 <tr className="border-b border-[#e8ecf1] bg-slate-50 text-slate-400 font-semibold">
                   <th className="p-4 text-xs uppercase tracking-wider">Name / Contact</th>
                   {mode !== 'clients' && <th className="p-4 text-xs uppercase tracking-wider">Guard ID</th>}
+                  {mode === 'clients' && <th className="p-4 text-xs uppercase tracking-wider">Client ID</th>}
                   {mode === 'clients' && <th className="p-4 text-xs uppercase tracking-wider">Status</th>}
                   {mode === 'verified' && <th className="p-4 text-xs uppercase tracking-wider">Nationality</th>}
                   {mode === 'verified' && <th className="p-4 text-xs uppercase tracking-wider">Experience</th>}
@@ -542,7 +545,15 @@ export default function UserManagement({ mode }) {
                     {mode !== 'clients' && (
                       <td className="p-4">
                         <span className="text-xs font-mono font-bold text-[#1a56b4] uppercase">
-                          {item.profile?.guardId || 'PENDING'}
+                          {item.profile?.guardId || item.guardId || 'PENDING'}
+                        </span>
+                      </td>
+                    )}
+
+                    {mode === 'clients' && (
+                      <td className="p-4">
+                        <span className="text-xs font-mono font-bold text-[#1a56b4] uppercase">
+                          {item.clientId || '—'}
                         </span>
                       </td>
                     )}
@@ -725,7 +736,7 @@ export default function UserManagement({ mode }) {
                   {mode === 'verified' ? 'Guard Profile Details' : mode === 'training' ? 'Guard Training Details' : 'Verify Guard Application'}
                 </h3>
                 <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold text-[#1a56b4]">
-                  Candidate ID: {selectedGuard.profile?.guardId || 'Pending Assignment'}
+                  Candidate ID: {selectedGuard.profile?.guardId || selectedGuard.guardId || 'Pending Assignment'}
                 </p>
               </div>
               <button
@@ -1434,7 +1445,7 @@ export default function UserManagement({ mode }) {
                               const eligibility = response?.data || response;
                               if (eligibility && eligibility.eligible) {
                                 setVerifyForm({
-                                  guardId: '',
+                                  guardId: guardDetails.profile?.guardId || guardDetails.guardId || '',
                                   grade: 'A',
                                   trainingName: '',
                                   trainingStartDate: '',
@@ -1626,23 +1637,18 @@ export default function UserManagement({ mode }) {
                 <UserCheck size={18} className="text-emerald-400" />
                 <span>Verify & Approve Guard</span>
               </h3>
-              <p className="text-xs text-slate-400 mt-1">Configure guard ID, grade, and initial training parameters below.</p>
+              <p className="text-xs text-slate-400 mt-1">Confirm assigned Guard ID, then set grade and initial training parameters.</p>
             </div>
 
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
-                if (!verifyForm.guardId.trim()) {
-                  toast.error('Guard ID is required');
-                  return;
-                }
                 if (!verifyForm.trainingName.trim()) {
                   toast.error('Training name is required');
                   return;
                 }
 
                 const payload = {
-                  guardId: verifyForm.guardId,
                   grade: verifyForm.grade,
                   training: {
                     name: verifyForm.trainingName,
@@ -1658,14 +1664,12 @@ export default function UserManagement({ mode }) {
               className="space-y-4"
             >
               <div className="space-y-1">
-                <label className="text-xs text-slate-600 font-semibold">Guard ID <span className="text-red-500">*</span></label>
+                <label className="text-xs text-slate-600 font-semibold">Guard ID</label>
                 <input
                   type="text"
-                  required
-                  placeholder="e.g. W247-G001"
-                  value={verifyForm.guardId}
-                  onChange={(e) => setVerifyForm({ ...verifyForm, guardId: e.target.value })}
-                  className="w-full px-3 py-2 bg-slate-50 border border-[#e8ecf1] rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#1a56b4] transition"
+                  readOnly
+                  value={verifyForm.guardId || 'Will be assigned on verify'}
+                  className="w-full px-3 py-2 bg-slate-100 border border-[#e8ecf1] rounded-xl text-sm text-slate-800 font-mono uppercase cursor-default"
                 />
               </div>
 
